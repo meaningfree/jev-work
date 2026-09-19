@@ -2,7 +2,9 @@ import { buildQuestions, buildState } from './questions.js';
 import { interpret, summaryText, pct, CONF_LOW, FLAG_ON } from './interpret.js';
 import { mockEvaluate } from './mock.js';
 
-const LS_KEY = 'jev-search-generator.endpoint';
+// Worker で配信しているときは同じオリジンの /jev が中継になる。
+// 中継が無い静的配信（GitHub Pages など）ではデモモードに落ちる。
+const SAME_ORIGIN = new URL('jev', document.baseURI).href;
 
 const EXAMPLES = {
   family:
@@ -18,29 +20,28 @@ const EXAMPLES = {
 const $ = (id) => document.getElementById(id);
 const el = {
   hearing: $('hearing'), run: $('run'), clear: $('clear'), status: $('status'),
-  mode: $('mode-badge'), result: $('result'), summary: $('summary-chips'),
+  result: $('result'), summary: $('summary-chips'),
   flagChips: $('flag-chips'), axes: $('axes'),
   flags: $('flags'), raw: $('raw'), copy: $('copy'), copyNote: $('copy-note'),
-  endpoint: $('endpoint'), settings: $('settings-details'),
 };
 
 let lastResult = null;
 
 /* ---------- 接続先 ---------- */
 
-const getEndpoint = () => (localStorage.getItem(LS_KEY) || '').trim();
+let endpoint = '';   // 空文字ならデモモード
 
-function refreshMode() {
-  const endpoint = getEndpoint();
-  el.endpoint.value = endpoint;
-  if (endpoint) {
-    el.mode.textContent = 'Jev API に接続（プロキシ経由）';
-    el.mode.classList.remove('demo');
-  } else {
-    el.mode.textContent = 'デモモード（API キー未設定）';
-    el.mode.classList.add('demo');
+async function resolveEndpoint() {
+  try {
+    const res = await fetch(SAME_ORIGIN, { method: 'GET' });
+    const body = res.ok ? await res.json() : null;
+    endpoint = body?.service === 'jev-proxy' && body?.configured === true ? SAME_ORIGIN : '';
+  } catch {
+    endpoint = '';   // 静的配信なら 404 か JSON でない応答になる
   }
 }
+
+const ready = resolveEndpoint();
 
 /* ---------- 推論 ---------- */
 
@@ -54,7 +55,6 @@ function errorMessage(status, body) {
 }
 
 async function evaluate(text) {
-  const endpoint = getEndpoint();
   if (!endpoint) return mockEvaluate(text);
 
   const res = await fetch(endpoint, {
@@ -143,8 +143,10 @@ async function run() {
     return;
   }
 
+  await ready;   // 起動直後は接続先の判定を待つ
+
   el.run.disabled = true;
-  el.status.textContent = getEndpoint() ? 'Jev に問い合わせ中…' : 'デモモードで推定中…';
+  el.status.textContent = endpoint ? 'Jev に問い合わせ中…' : 'デモモードで推定中…';
   const started = performance.now();
 
   try {
@@ -153,13 +155,11 @@ async function run() {
     const ms = Math.round(performance.now() - started);
     const tokens = result.usage?.input_tokens;
     el.status.textContent = result._demo
-      ? `デモモードの結果です（${ms}ms）。実際の確率は Jev の API キーを設定すると出ます。`
+      ? `デモモードの結果です（${ms}ms）。`
       : `Jev から取得しました（${ms}ms${tokens ? ` / 入力 ${tokens} トークン` : ''}）。`;
     el.result.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (error) {
-    const hint = getEndpoint() ? '' : '\nプロキシ URL を設定するか、空欄にしてデモモードで試してください。';
-    el.status.textContent = `失敗しました: ${error.message}${hint}`;
-    el.settings.open = true;
+    el.status.textContent = `失敗しました: ${error.message}`;
   } finally {
     el.run.disabled = false;
   }
@@ -195,19 +195,3 @@ el.copy.addEventListener('click', async () => {
   }
   setTimeout(() => (el.copyNote.textContent = ''), 3000);
 });
-
-$('save-endpoint').addEventListener('click', () => {
-  const value = el.endpoint.value.trim();
-  if (value) localStorage.setItem(LS_KEY, value);
-  else localStorage.removeItem(LS_KEY);
-  refreshMode();
-  el.status.textContent = value ? '接続先を保存しました。' : 'デモモードに戻しました。';
-});
-
-$('forget-endpoint').addEventListener('click', () => {
-  localStorage.removeItem(LS_KEY);
-  refreshMode();
-  el.status.textContent = 'デモモードに戻しました。';
-});
-
-refreshMode();

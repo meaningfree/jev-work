@@ -1,0 +1,12 @@
+name = "jev-search-generator"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+
+# public/ の中身をそのまま静的配信し、/jev だけ worker.js が処理する。
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+# シークレットはここには書かない。
+#   npx wrangler secret put TYPESAFE_API_KEY
+# ローカル（npx wrangler dev）では .dev.vars に書く。
