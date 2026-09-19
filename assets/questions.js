@@ -163,17 +163,74 @@ export const AXES = [
 ];
 
 // こだわり条件（チェックボックス系）。noul なので確率がそのまま「入れる/入れない」の目安になる。
+//
+// yes / no は noul の criteria。これを書かないと、入力に何も手がかりが無い条件まで
+// 0.4〜0.5 あたりに張り付いて「要確認」が増えてしまうので、
+// 「言及も示唆も無ければ false」をはっきり書いて下に寄せている。
+const NO_EVIDENCE =
+  '入力に言及も示唆もない。その条件を必要としていると読み取れる材料が無い場合は必ずこちら。一般論として多くの人が好むというだけでは true にしない。';
+
 export const FLAGS = [
-  { id: 'pet', label: 'ペット相談可', instructions: 'ペットと暮らす前提の住まいを探していますか？' },
-  { id: 'parking', label: '駐車場あり', instructions: '駐車場が必要ですか？（車を所有・購入予定を含む）' },
-  { id: 'kosodate', label: '学校・保育園が近い', instructions: '子どもの通学・通園環境を条件に入れるべきですか？' },
-  { id: 'work_space', label: 'ワークスペースが取れる', instructions: '在宅勤務や書斎のためのスペースを必要としていますか？' },
-  { id: 'shuno', label: '収納が多い', instructions: '収納の量を条件に入れるべきですか？（荷物が多い、片付けたいなどを含む）' },
-  { id: 'kaimono', label: 'スーパー・買い物が近い', instructions: '日常の買い物のしやすさを条件に入れるべきですか？' },
-  { id: 'shizuka', label: '静かな環境', instructions: '騒音の少ない静かな環境を求めていますか？' },
-  { id: 'hiatari', label: '日当たり・南向き', instructions: '日当たりの良さを条件に入れるべきですか？' },
-  { id: 'barrier_free', label: 'バリアフリー・EVあり', instructions: '段差の少なさやエレベーターの有無を条件に入れるべきですか？（高齢の家族、小さな子ども、身体の事情を含む）' },
-  { id: 'reform', label: 'リノベ前提でも可', instructions: '内装や設備が古くても、リフォーム・リノベーション前提で受け入れられますか？' },
+  {
+    id: 'pet',
+    label: 'ペット相談可',
+    instructions: 'ペット可の物件に絞るべきですか？',
+    yes: 'ペットを飼っている、飼う予定がある、動物と暮らしたいと書かれている',
+  },
+  {
+    id: 'parking',
+    label: '駐車場あり',
+    instructions: '駐車場ありに絞るべきですか？',
+    yes: '車を持っている、買う予定がある、車移動が前提の生活だと書かれている',
+  },
+  {
+    id: 'kosodate',
+    label: '学校・保育園が近い',
+    instructions: '通学・通園のしやすさを条件に入れるべきですか？',
+    yes: '子どもがいる、これから持つ予定がある、学区や保育園・公園への言及がある',
+  },
+  {
+    id: 'work_space',
+    label: 'ワークスペースが取れる',
+    instructions: '仕事用のスペースを条件に入れるべきですか？',
+    yes: '在宅勤務・リモートワーク・書斎・持ち帰り仕事への言及がある',
+  },
+  {
+    id: 'shuno',
+    label: '収納が多い',
+    instructions: '収納の多さを条件に入れるべきですか？',
+    yes: '荷物が多い、収納が足りない、片付かない、趣味の道具があるなどの言及がある',
+  },
+  {
+    id: 'kaimono',
+    label: 'スーパー・買い物が近い',
+    instructions: '買い物のしやすさを条件に入れるべきですか？',
+    yes: 'スーパーや商店街への言及、車を持たない生活、徒歩圏の利便性への言及がある',
+  },
+  {
+    id: 'shizuka',
+    label: '静かな環境',
+    instructions: '静かさを条件に入れるべきですか？',
+    yes: '静けさを求める、今の住まいの騒音が不満、落ち着いた環境を望むと書かれている',
+  },
+  {
+    id: 'hiatari',
+    label: '日当たり・南向き',
+    instructions: '日当たりを条件に入れるべきですか？',
+    yes: '日当たり・採光・南向き・今の家が暗いといった言及がある',
+  },
+  {
+    id: 'barrier_free',
+    label: 'バリアフリー・EVあり',
+    instructions: '段差の少なさやエレベーターを条件に入れるべきですか？',
+    yes: '高齢の家族がいる、階段がつらい、ベビーカーを使う、身体の事情があると書かれている',
+  },
+  {
+    id: 'reform',
+    label: 'リノベ前提でも可',
+    instructions: '内装や設備が古い物件も候補に入れてよいですか？',
+    yes: 'リフォーム・リノベ・DIY をしたい、古くても構わないと書かれている',
+  },
 ];
 
 /** Jev の /v1/systemone に投げる questions マップを組み立てる。 */
@@ -181,7 +238,11 @@ export function buildQuestions() {
   const questions = {};
   for (const axis of AXES) questions[axis.id] = axis.question;
   for (const flag of FLAGS) {
-    questions[`flag_${flag.id}`] = { type: 'noul', instructions: flag.instructions };
+    questions[`flag_${flag.id}`] = {
+      type: 'noul',
+      instructions: flag.instructions,
+      criteria: { true: flag.yes, false: NO_EVIDENCE },
+    };
   }
   return questions;
 }
