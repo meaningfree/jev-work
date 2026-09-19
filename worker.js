@@ -6,7 +6,7 @@
  *
  * デプロイ:
  *   npx wrangler deploy
- *   npx wrangler secret put TYPESAFE_API_KEY   # sk-... を貼る
+ *   npx wrangler secret put TYPESAFE_API_KEY   # apikey_... を貼る
  *
  * /jev 以外のパスは静的アセット（public/ の中身）が返る。
  */

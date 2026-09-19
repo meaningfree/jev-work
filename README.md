@@ -42,7 +42,7 @@ API キーもフロントには置けないので、キーを持つ中継を 1 �
 
 ```bash
 npx wrangler deploy                        # public/ と worker.js がまとめて上がる
-npx wrangler secret put TYPESAFE_API_KEY   # sk-... を貼る
+npx wrangler secret put TYPESAFE_API_KEY   # apikey_... を貼る
 ```
 
 出力された `https://jev-search-generator.<アカウント>.workers.dev` を開けばそのまま実 API で動く。
@@ -53,14 +53,14 @@ npx wrangler secret put TYPESAFE_API_KEY   # sk-... を貼る
 Cloudflare の実行環境そのままで試す場合:
 
 ```bash
-echo 'TYPESAFE_API_KEY="sk-..."' > .dev.vars   # .gitignore 済み
+echo 'TYPESAFE_API_KEY="apikey_..."' > .dev.vars   # .gitignore 済み
 npx wrangler dev                               # → http://localhost:8787
 ```
 
 Node だけで済ませたい場合（Cloudflare アカウント不要）:
 
 ```bash
-TYPESAFE_API_KEY=sk-... node proxy/dev-server.mjs   # → http://localhost:8787
+TYPESAFE_API_KEY=apikey_... node proxy/dev-server.mjs   # → http://localhost:8787
 ```
 
 どちらも画面と `/jev` が同一オリジンになるので、本番と同じ経路で確認できる。
@@ -71,8 +71,8 @@ TYPESAFE_API_KEY=sk-... node proxy/dev-server.mjs   # → http://localhost:8787
 画面と同じ質問定義で 1 回だけ実 API を叩く。
 
 ```bash
-TYPESAFE_API_KEY=sk-... node proxy/try-jev.mjs "夫婦と子ども2人。いま2LDKで手狭で購入を検討中。..."
-TYPESAFE_API_KEY=sk-... node proxy/try-jev.mjs --json "..."   # 生レスポンス
+TYPESAFE_API_KEY=apikey_... node proxy/try-jev.mjs "夫婦と子ども2人。いま2LDKで手狭で購入を検討中。..."
+TYPESAFE_API_KEY=apikey_... node proxy/try-jev.mjs --json "..."   # 生レスポンス
 ```
 
 おすすめ条件・まだ聞けていないこと・全選択肢の分布に加えて、レイテンシと入力トークン数・概算コストが出る。
@@ -89,7 +89,7 @@ TYPESAFE_API_KEY=sk-... node proxy/try-jev.mjs --json "..."   # 生レスポン�
 
 ## Jev の API キーと支払いについて
 
-- キーの発行は [console.typesafe.ai/settings/keys](https://console.typesafe.ai/settings/keys)（2026/09 時点で early access、ウェイトリスト経由）。
+- キーは `apikey_` で始まる 108 文字の文字列（`sk-` ではない）。発行は [console.typesafe.ai/settings/keys](https://console.typesafe.ai/settings/keys)（2026/09 時点で early access、ウェイトリスト経由）。
 - 料金は**入力 100 万トークンあたり $0.042 / 出力は無料**。このアプリの 1 リクエストは質問定義込みで 3,000〜3,500 トークン程度（実測: 2,401 トークン / 444ms / jev-1.13.0）なので、**1 回およそ $0.0001（0.02 円前後）**。1 万回叩いて 1〜2 ドル。
 - 支払いはクレジット前払い方式（コンソールの Billing でクレジットを購入、残高が閾値を下回ったときの自動追加はオプトイン）。明示的な無料枠は公表されていないので、残高ゼロだと `402` / `403` が返る。まずはキーだけでそのまま叩いてみて、エラーが出たらクレジットを買えばよい。
 - TypeSafe に直接登録したくない場合は、Cloudflare Workers AI（モデル ID `typesafe/jev`）や Vercel AI Gateway 経由でも同じモデルを呼べる。その場合は Cloudflare / Vercel 側の課金になり、`proxy/upstream.mjs` の `UPSTREAM` をそちらに差し替える。
