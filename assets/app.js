@@ -1,5 +1,5 @@
-import { AXES, buildQuestions, buildState } from './questions.js';
-import { interpret, openQuestions, summaryText, pct, CONF_LOW, FLAG_ON } from './interpret.js';
+import { buildQuestions, buildState } from './questions.js';
+import { interpret, summaryText, pct, CONF_LOW, FLAG_ON } from './interpret.js';
 import { mockEvaluate } from './mock.js';
 
 const LS_KEY = 'jev-search-generator.endpoint';
@@ -19,7 +19,7 @@ const $ = (id) => document.getElementById(id);
 const el = {
   hearing: $('hearing'), run: $('run'), clear: $('clear'), status: $('status'),
   mode: $('mode-badge'), result: $('result'), summary: $('summary-chips'),
-  flagChips: $('flag-chips'), askmore: $('askmore'), axes: $('axes'),
+  flagChips: $('flag-chips'), axes: $('axes'),
   flags: $('flags'), raw: $('raw'), copy: $('copy'), copyNote: $('copy-note'),
   endpoint: $('endpoint'), settings: $('settings-details'),
 };
@@ -73,7 +73,7 @@ async function evaluate(text) {
 /* ---------- 描画 ---------- */
 
 function bars(read) {
-  const top = read.ranked[0]?.label;
+  const top = read.value;
   return read.ordered
     .map(({ label, p }) => `
       <div class="bar-row ${label === top ? 'top' : ''}">
@@ -83,8 +83,8 @@ function bars(read) {
     .join('');
 }
 
-function renderAxes(reads) {
-  el.axes.innerHTML = AXES.map((axis) => {
+function renderAxes(axes, reads) {
+  el.axes.innerHTML = axes.map((axis) => {
     const read = reads[axis.id];
     if (!read) return '';
     const conf = read.confidence != null ? `確信度 ${pct(read.confidence)}` : '';
@@ -95,14 +95,14 @@ function renderAxes(reads) {
           <h3>${axis.label}</h3>
           <span class="conf">${conf}${score}</span>
         </header>
-        <p class="hint">${axis.hint}</p>
+        ${axis.hint ? `<p class="hint">${axis.hint}</p>` : ''}
         <div class="bars">${bars(read)}</div>
       </article>`;
   }).join('');
 }
 
-function renderSummary(reads) {
-  el.summary.innerHTML = AXES.map((axis) => {
+function renderSummary(axes, reads) {
+  el.summary.innerHTML = axes.map((axis) => {
     const read = reads[axis.id];
     if (!read) return '';
     const loose = read.probability < CONF_LOW ? 'loose' : '';
@@ -123,24 +123,11 @@ function renderFlags(rows) {
     : '<span class="note">はっきり必要と読み取れたこだわり条件はありませんでした。</span>';
 }
 
-function renderAskMore(interpreted) {
-  const items = openQuestions(interpreted).map((item) =>
-    item.kind === 'axis'
-      ? `<strong>${item.label}</strong>：「${item.first.label}」と「${item.second?.label ?? '—'}」で割れています（${pct(item.first.p)} / ${pct(item.second?.p)}）
-         <span class="q">→ どちらに近いか確認したい</span>`
-      : `<strong>${item.label}</strong>：必要そうだが読み切れません（${pct(item.p)}）<span class="q">→ 条件に入れるか確認したい</span>`);
-
-  el.askmore.innerHTML = items.length
-    ? items.map((t) => `<li>${t}</li>`).join('')
-    : '<li>大きく割れている項目はありません。この条件でそのまま検索してよさそうです。</li>';
-}
-
 function render(result) {
   const interpreted = interpret(result);
-  renderSummary(interpreted.reads);
+  renderSummary(interpreted.axes, interpreted.reads);
   renderFlags(interpreted.flagRows);
-  renderAskMore(interpreted);
-  renderAxes(interpreted.reads);
+  renderAxes(interpreted.axes, interpreted.reads);
   el.raw.textContent = JSON.stringify(result, null, 2);
   lastResult = interpreted;
   el.result.hidden = false;

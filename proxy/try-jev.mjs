@@ -5,7 +5,7 @@
  *   TYPESAFE_API_KEY=sk-... node proxy/try-jev.mjs "夫婦と子ども2人。いま2LDKで手狭..."
  *   TYPESAFE_API_KEY=sk-... node proxy/try-jev.mjs --json "..."   # 生レスポンスを出す
  */
-import { buildQuestions, buildState, AXES } from '../assets/questions.js';
+import { buildQuestions, buildState } from '../assets/questions.js';
 import { interpret, openQuestions, summaryText, pct } from '../assets/interpret.js';
 
 const UPSTREAM = 'https://api.typesafe.ai/v1/systemone';
@@ -65,7 +65,7 @@ for (const item of open) {
 }
 
 console.log('\n【分布】');
-for (const axis of AXES) {
+for (const axis of interpreted.axes) {
   const read = interpreted.reads[axis.id];
   if (!read) continue;
   const dist = read.ordered.map((o) => `${o.label} ${pct(o.p)}`).join(' / ');

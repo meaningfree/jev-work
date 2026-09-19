@@ -120,10 +120,6 @@ button { font: inherit; cursor: pointer; border-radius: 8px; }
 .summary-actions { display: flex; align-items: center; gap: 12px; margin-top: 18px; flex-wrap: wrap; }
 .summary-actions .note { margin: 0; }
 
-.askmore { margin: 8px 0 0; padding-left: 1.2em; }
-.askmore li { margin-bottom: 6px; }
-.askmore .q { color: var(--muted); font-size: .85rem; }
-
 .axes { display: grid; gap: 16px; }
 @media (min-width: 640px) { .axes { grid-template-columns: 1fr 1fr; } }
 
