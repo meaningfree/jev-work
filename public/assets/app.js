@@ -1,5 +1,5 @@
 import { buildQuestions, buildState } from './questions.js';
-import { interpret, summaryText, pct, CONF_LOW, FLAG_ON } from './interpret.js';
+import { interpret, summaryText, openQuestions, pct, CONF_LOW, FLAG_ON } from './interpret.js';
 import { mockEvaluate } from './mock.js';
 
 // Worker で配信しているときは同じオリジンの /jev が中継になる。
@@ -83,8 +83,41 @@ function bars(read) {
     .join('');
 }
 
-function renderAxes(axes, reads) {
-  el.axes.innerHTML = axes.map((axis) => {
+function askItem(item) {
+  if (item.kind === 'flag') {
+    return `
+      <li>
+        <span class="ask-label">${item.label}</span>
+        <span class="ask-detail">必要かどうか決めきれていません（${pct(item.p)}）</span>
+      </li>`;
+  }
+  const first = item.first ? `${item.first.label}（${pct(item.first.p)}）` : '';
+  const second = item.second ? ` と ${item.second.label}（${pct(item.second.p)}）` : '';
+  return `
+    <li>
+      <span class="ask-label">${item.label}</span>
+      <span class="ask-detail">${first}${second} で割れています</span>
+    </li>`;
+}
+
+// 軸は奇数個になることが多く（賃料と価格はどちらか一方だけ出る）、2列グリッドの
+// 最後に空きができる。そこを「確率が割れていて聞き足りない項目」で埋める。
+function askCard(interpreted, columnLeftOver) {
+  const items = openQuestions(interpreted);
+  const body = items.length
+    ? `<ul class="ask-list">${items.map(askItem).join('')}</ul>`
+    : '<p class="note">確率が割れている項目はありません。入力だけで一通り決めきれています。</p>';
+  return `
+    <article class="axis ask ${columnLeftOver ? '' : 'wide'}">
+      <header><h3>もう少し聞きたいこと</h3></header>
+      <p class="hint">確認できると、検索条件の精度が上がる項目です。</p>
+      ${body}
+    </article>`;
+}
+
+function renderAxes(interpreted) {
+  const { axes, reads } = interpreted;
+  const cards = axes.map((axis) => {
     const read = reads[axis.id];
     if (!read) return '';
     const conf = read.confidence != null ? `確信度 ${pct(read.confidence)}` : '';
@@ -98,7 +131,9 @@ function renderAxes(axes, reads) {
         ${axis.hint ? `<p class="hint">${axis.hint}</p>` : ''}
         <div class="bars">${bars(read)}</div>
       </article>`;
-  }).join('');
+  }).filter(Boolean);
+
+  el.axes.innerHTML = cards.join('') + askCard(interpreted, cards.length % 2 === 1);
 }
 
 function renderSummary(axes, reads) {
@@ -127,7 +162,7 @@ function render(result) {
   const interpreted = interpret(result);
   renderSummary(interpreted.axes, interpreted.reads);
   renderFlags(interpreted.flagRows);
-  renderAxes(interpreted.axes, interpreted.reads);
+  renderAxes(interpreted);
   el.raw.textContent = JSON.stringify(result, null, 2);
   lastResult = interpreted;
   el.result.hidden = false;

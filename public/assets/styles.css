@@ -113,8 +113,11 @@ button { font: inherit; cursor: pointer; border-radius: 8px; }
 .summary-actions { display: flex; align-items: center; gap: 12px; margin-top: 18px; flex-wrap: wrap; }
 .summary-actions .note { margin: 0; }
 
-.axes { display: grid; gap: 16px; }
-@media (min-width: 640px) { .axes { grid-template-columns: 1fr 1fr; } }
+.axes { display: grid; gap: 16px; margin: 0 0 16px; }
+@media (min-width: 640px) {
+  .axes { grid-template-columns: 1fr 1fr; }
+  .axis.wide { grid-column: 1 / -1; }
+}
 
 .axis { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
 .axis header { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 4px; }
@@ -134,6 +137,15 @@ button { font: inherit; cursor: pointer; border-radius: 8px; }
 .bar-val { font-variant-numeric: tabular-nums; color: var(--muted); font-size: .8rem; }
 
 .flags { display: grid; gap: 6px; }
+
+.ask-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.ask-list li { position: relative; padding-left: 14px; font-size: .85rem; line-height: 1.5; }
+.ask-list li::before {
+  content: ""; position: absolute; left: 0; top: .5em;
+  width: 6px; height: 6px; border-radius: 50%; background: var(--bar-top); opacity: .55;
+}
+.ask-label { display: block; font-weight: 700; }
+.ask-detail { display: block; color: var(--muted); font-size: .8rem; }
 
 pre {
   margin: 12px 0 0; padding: 12px; overflow: auto; max-height: 360px;
