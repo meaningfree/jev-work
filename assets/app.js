@@ -1,10 +1,8 @@
-import { AXES, FLAGS, buildQuestions, buildState } from './questions.js';
+import { AXES, buildQuestions, buildState } from './questions.js';
+import { interpret, openQuestions, summaryText, pct, CONF_LOW, FLAG_ON } from './interpret.js';
 import { mockEvaluate } from './mock.js';
 
 const LS_KEY = 'jev-search-generator.endpoint';
-const CONF_LOW = 0.45;   // これ未満は「迷っている」扱い
-const FLAG_ON = 0.5;     // これ以上のこだわり条件はチェックを入れる
-const FLAG_MAYBE = 0.3;  // これ以上なら確認したい
 
 const EXAMPLES = {
   family:
@@ -46,8 +44,6 @@ function refreshMode() {
 
 /* ---------- 推論 ---------- */
 
-const pct = (n) => `${Math.round(n * 100)}%`;
-
 function errorMessage(status, body) {
   const detail = body ? `（${body.slice(0, 200)}）` : '';
   if (status === 401) return `API キーが無効か、プロキシに設定されていません${detail}`;
@@ -72,43 +68,6 @@ async function evaluate(text) {
   });
   if (!res.ok) throw new Error(errorMessage(res.status, await res.text().catch(() => '')));
   return res.json();
-}
-
-/* ---------- 回答の読み取り ---------- */
-
-// choice / score のどちらでも「表示ラベル・確率・順位つき候補」を同じ形で扱う。
-function readAxis(axis, answer) {
-  if (!answer) return null;
-  if (answer.type === 'choice') {
-    const entries = Object.entries(answer.probabilities || {}).sort((a, b) => b[1] - a[1]);
-    const value = answer.choice ?? entries[0]?.[0];
-    return {
-      kind: 'choice',
-      value,
-      probability: answer.probabilities?.[value] ?? 0,
-      confidence: answer.confidence,
-      ranked: entries.map(([label, p]) => ({ label, p })),
-      ordered: Object.keys(axis.question.criteria).map((label) => ({
-        label,
-        p: answer.probabilities?.[label] ?? 0,
-      })),
-    };
-  }
-  const levels = axis.question.criteria;
-  const labelOf = (i) => answer.legend?.[String(i)] ?? levels[i];
-  const ordered = levels.map((_, i) => ({ label: labelOf(i), p: answer.probabilities?.[String(i)] ?? 0 }));
-  // おすすめ値は最も確率の高いレベル（期待値の丸めだと確率の低いレベルを指すことがある）。
-  // 期待値のほうはカード側で score として併記する。
-  const ranked = [...ordered].sort((a, b) => b.p - a.p);
-  return {
-    kind: 'score',
-    value: ranked[0]?.label,
-    probability: ranked[0]?.p ?? 0,
-    confidence: answer.confidence,
-    score: answer.score,
-    ranked,
-    ordered,
-  };
 }
 
 /* ---------- 描画 ---------- */
@@ -151,10 +110,7 @@ function renderSummary(reads) {
   }).join('');
 }
 
-function renderFlags(answers) {
-  const rows = FLAGS.map((flag) => ({ flag, p: answers[`flag_${flag.id}`]?.noul ?? 0 }))
-    .sort((a, b) => b.p - a.p);
-
+function renderFlags(rows) {
   el.flags.innerHTML = rows.map(({ flag, p }) => `
     <div class="bar-row ${p >= FLAG_ON ? 'top' : ''}">
       <span class="bar-label"><span class="fill" style="width:${Math.max(p * 100, 1.5)}%"></span>${flag.label}</span>
@@ -165,54 +121,28 @@ function renderFlags(answers) {
   el.flagChips.innerHTML = on.length
     ? on.map(({ flag, p }) => `<span class="cond"><span class="v">${flag.label}</span><span class="p">${pct(p)}</span></span>`).join('')
     : '<span class="note">はっきり必要と読み取れたこだわり条件はありませんでした。</span>';
-
-  return rows;
 }
 
-function renderAskMore(reads, flagRows) {
-  const items = [];
-
-  for (const axis of AXES) {
-    const read = reads[axis.id];
-    if (!read || read.probability >= CONF_LOW) continue;
-    const [first, second] = read.ranked;
-    items.push(`<strong>${axis.label}</strong>：「${first.label}」と「${second?.label ?? '—'}」で割れています（${pct(first.p)} / ${pct(second?.p ?? 0)}）
-      <span class="q">→ どちらに近いか確認したい</span>`);
-  }
-
-  for (const { flag, p } of flagRows) {
-    if (p >= FLAG_MAYBE && p < FLAG_ON) {
-      items.push(`<strong>${flag.label}</strong>：必要そうだが読み切れません（${pct(p)}）<span class="q">→ 条件に入れるか確認したい</span>`);
-    }
-  }
+function renderAskMore(interpreted) {
+  const items = openQuestions(interpreted).map((item) =>
+    item.kind === 'axis'
+      ? `<strong>${item.label}</strong>：「${item.first.label}」と「${item.second?.label ?? '—'}」で割れています（${pct(item.first.p)} / ${pct(item.second?.p)}）
+         <span class="q">→ どちらに近いか確認したい</span>`
+      : `<strong>${item.label}</strong>：必要そうだが読み切れません（${pct(item.p)}）<span class="q">→ 条件に入れるか確認したい</span>`);
 
   el.askmore.innerHTML = items.length
     ? items.map((t) => `<li>${t}</li>`).join('')
     : '<li>大きく割れている項目はありません。この条件でそのまま検索してよさそうです。</li>';
 }
 
-function summaryText(reads, flagRows) {
-  const lines = ['【おすすめ検索条件】'];
-  for (const axis of AXES) {
-    const read = reads[axis.id];
-    if (read) lines.push(`- ${axis.label}: ${read.value}（${pct(read.probability)}）`);
-  }
-  const on = flagRows.filter((r) => r.p >= FLAG_ON);
-  lines.push('', '【チェックを入れる条件】');
-  lines.push(on.length ? on.map(({ flag, p }) => `- ${flag.label}（${pct(p)}）`).join('\n') : '- なし');
-  return lines.join('\n');
-}
-
 function render(result) {
-  const reads = {};
-  for (const axis of AXES) reads[axis.id] = readAxis(axis, result.answers?.[axis.id]);
-
-  renderSummary(reads);
-  const flagRows = renderFlags(result.answers || {});
-  renderAskMore(reads, flagRows);
-  renderAxes(reads);
+  const interpreted = interpret(result);
+  renderSummary(interpreted.reads);
+  renderFlags(interpreted.flagRows);
+  renderAskMore(interpreted);
+  renderAxes(interpreted.reads);
   el.raw.textContent = JSON.stringify(result, null, 2);
-  lastResult = { reads, flagRows };
+  lastResult = interpreted;
   el.result.hidden = false;
 }
 
@@ -269,7 +199,7 @@ for (const button of document.querySelectorAll('[data-example]')) {
 
 el.copy.addEventListener('click', async () => {
   if (!lastResult) return;
-  const text = summaryText(lastResult.reads, lastResult.flagRows);
+  const text = summaryText(lastResult);
   try {
     await navigator.clipboard.writeText(text);
     el.copyNote.textContent = 'コピーしました。';

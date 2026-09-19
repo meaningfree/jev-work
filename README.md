@@ -12,8 +12,10 @@ assets/questions.js   ★ Jev に投げる質問の定義（この仕組みの�
 assets/app.js         画面の組み立て・API 呼び出し
 assets/mock.js        API キーが無いときのデモ用ダミー推論（キーワードマッチ）
 assets/styles.css
+assets/interpret.js   レスポンスを検索条件に読み替える部分（画面と CLI で共用）
 proxy/cloudflare-worker.js  API キーを持つ中継サーバー（Cloudflare Workers）
 proxy/dev-server.mjs        ローカル確認用（静的配信＋中継）
+proxy/try-jev.mjs           実 API を 1 回だけ叩いて結果を表示する CLI
 ```
 
 ## 動かし方
@@ -26,7 +28,18 @@ proxy/dev-server.mjs        ローカル確認用（静的配信＋中継）
 npx http-server . -p 8080     # あるいは node proxy/dev-server.mjs
 ```
 
-### 2. Jev の実 API につなぐ
+### 2. まず API の手応えだけ見る（CLI）
+
+画面と同じ質問定義で 1 回だけ実 API を叩く。
+
+```bash
+TYPESAFE_API_KEY=sk-... node proxy/try-jev.mjs "夫婦と子ども2人。いま2LDKで手狭で購入を検討中。..."
+TYPESAFE_API_KEY=sk-... node proxy/try-jev.mjs --json "..."   # 生レスポンス
+```
+
+おすすめ条件・まだ聞けていないこと・全選択肢の分布に加えて、レイテンシと入力トークン数・概算コストが出る。
+
+### 3. Jev の実 API につなぐ（画面から）
 
 Jev の API は**ブラウザからの直接呼び出しを CORS で拒否する**（`Disallowed CORS origin`）。
 API キーもフロントに置けないので、キーを持つ中継を 1 枚挟む必要がある。
@@ -51,16 +64,16 @@ npx wrangler secret put ALLOWED_ORIGINS    # https://<ユーザー名>.github.io
 
 接続先 URL はブラウザの localStorage にだけ保存される。空欄にするとデモモードに戻る。
 
-### 3. GitHub Pages で公開
+### 4. GitHub Pages で公開
 
 リポジトリの Settings → Pages → Source を `Deploy from a branch`、ブランチを `main` / `(root)` にするだけ。
 ビルド不要の静的ファイルしか置いていない。
 
 ## Jev の API キーと支払いについて
 
-- キーの発行は [typesafe.ai](https://typesafe.ai/) のウェイトリスト経由（2026/09 時点で early access）。登録後、コンソールの **API Keys** から発行する。
+- キーの発行は [console.typesafe.ai/settings/keys](https://console.typesafe.ai/settings/keys)（2026/09 時点で early access、ウェイトリスト経由）。
 - 料金は**入力 100 万トークンあたり $0.042 / 出力は無料**。このアプリの 1 リクエストは質問定義込みで 3,000 トークン前後なので、**1 回およそ $0.0001（0.02 円前後）**。1 万回叩いて数ドル。
-- 明示的な無料枠は公表されていないので、実 API を使うなら支払い情報の登録が要る。
+- 支払いはクレジット前払い方式（コンソールの Billing でクレジットを購入、残高が閾値を下回ったときの自動追加はオプトイン）。明示的な無料枠は公表されていないので、残高ゼロだと `402` / `403` が返る。まずはキーだけでそのまま叩いてみて、エラーが出たらクレジットを買えばよい。
 - TypeSafe に直接登録したくない場合は、Cloudflare Workers AI（モデル ID `typesafe/jev`）や Vercel AI Gateway 経由でも同じモデルを呼べる。その場合は Cloudflare / Vercel 側の課金になり、`proxy/` の転送先をそちらに差し替える。
 
 ## 仕組み
