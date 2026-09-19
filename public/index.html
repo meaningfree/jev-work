@@ -74,16 +74,19 @@
     <details id="settings-details">
       <summary>API の接続設定</summary>
       <p class="note">
-        Jev の API はブラウザからの直接呼び出しを CORS で拒否します。自分で用意したプロキシ（<code>proxy/</code> 参照）の URL を入れてください。
-        空欄のままだとキーワードベースの<strong>デモモード</strong>で動きます。
+        Jev の API はブラウザからの直接呼び出しを CORS で拒否するため、間に中継サーバーが要ります。
+        Cloudflare Workers で配信している場合は<strong>同じサーバーの <code>/jev</code> を自動で使う</strong>ので設定は不要です。
+        中継の無い静的ホスティング（GitHub Pages など）では、キーワードベースの<strong>デモモード</strong>になります。
+        別に立てた中継を使いたいときだけ URL を入れてください。
       </p>
-      <label class="field-label" for="endpoint">プロキシのエンドポイント URL</label>
-      <input id="endpoint" type="url" placeholder="https://your-worker.workers.dev/jev" />
+      <label class="field-label" for="endpoint">中継サーバーの URL（任意）</label>
+      <input id="endpoint" type="url" placeholder="自動（このサーバーの /jev を使う）" />
       <div class="actions">
         <button id="save-endpoint" class="ghost" type="button">保存</button>
-        <button id="forget-endpoint" class="ghost" type="button">削除してデモに戻す</button>
+        <button id="auto-endpoint" class="ghost" type="button">自動に戻す</button>
+        <button id="demo-endpoint" class="ghost" type="button">デモモードで使う</button>
       </div>
-      <p class="note">URL はこのブラウザの localStorage にだけ保存されます。</p>
+      <p class="note">設定はこのブラウザの localStorage にだけ保存されます。</p>
     </details>
   </section>
 </main>
