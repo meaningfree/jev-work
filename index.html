@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>くらしの希望から検索条件をつくる</title>
+<meta name="description" content="住み替えの希望を書くだけで、不動産ポータルの検索条件を確率つきで提案します（Jev / TypeSafe System One のお試し）" />
+<link rel="stylesheet" href="./assets/styles.css" />
+</head>
+<body>
+<header class="site-header">
+  <h1>くらしの希望から<wbr />検索条件をつくる</h1>
+  <p class="lead">
+    世帯構成・住み替えの理由・したい暮らし・気になるエリア——決まっていることだけ書いてください。
+    ホームズやスーモで使える検索条件の案を、<strong>確率つき</strong>で並べます。
+  </p>
+  <p class="badge-row">
+    <span class="badge">Jev / TypeSafe System One のお試し</span>
+    <span class="badge" id="mode-badge">モード確認中…</span>
+  </p>
+</header>
+
+<main>
+  <section class="card">
+    <label class="field-label" for="hearing">いま決まっていること・思っていること</label>
+    <textarea id="hearing" rows="7" placeholder="例）夫婦と子ども2人（4歳・1歳）。いま2LDKの賃貸で手狭になってきたので購入を検討中。夫の職場は品川で、電車で40分くらいまでなら許容。子どもを走らせられる公園が近くにあって、静かな住宅地がいい。車も買う予定。予算はあまり余裕がない。"></textarea>
+    <div class="examples">
+      <span class="examples-label">例を入れる：</span>
+      <button class="chip" type="button" data-example="family">子育て中・購入検討</button>
+      <button class="chip" type="button" data-example="single">初めての一人暮らし</button>
+      <button class="chip" type="button" data-example="senior">親との住み替え</button>
+      <button class="chip" type="button" data-example="remote">リモート中心・移住も視野</button>
+    </div>
+    <div class="actions">
+      <button id="run" class="primary" type="button">希望から検索条件をつくる</button>
+      <button id="clear" class="ghost" type="button">クリア</button>
+    </div>
+    <p class="note" id="status" role="status" aria-live="polite"></p>
+  </section>
+
+  <section id="result" class="result" hidden>
+    <div class="card summary">
+      <h2>この条件で探すのがおすすめ</h2>
+      <div id="summary-chips" class="chips"></div>
+      <h3>チェックを入れる条件</h3>
+      <div id="flag-chips" class="chips"></div>
+      <div class="summary-actions">
+        <button id="copy" class="ghost" type="button">検索条件メモをコピー</button>
+        <span class="note" id="copy-note"></span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>まだ聞けていないこと</h2>
+      <p class="note">確率が割れている＝この人の中でも決まっていない可能性が高い項目です。ここを聞くと条件が一気に締まります。</p>
+      <ul id="askmore" class="askmore"></ul>
+    </div>
+
+    <h2 class="section-title">項目ごとの確率</h2>
+    <div id="axes" class="axes"></div>
+
+    <div class="card">
+      <h2>こだわり条件の確率</h2>
+      <div id="flags" class="flags"></div>
+    </div>
+
+    <details class="card">
+      <summary>Jev のレスポンス（JSON）</summary>
+      <pre id="raw"></pre>
+    </details>
+  </section>
+
+  <section class="card settings">
+    <details id="settings-details">
+      <summary>API の接続設定</summary>
+      <p class="note">
+        Jev の API はブラウザからの直接呼び出しを CORS で拒否します。自分で用意したプロキシ（<code>proxy/</code> 参照）の URL を入れてください。
+        空欄のままだとキーワードベースの<strong>デモモード</strong>で動きます。
+      </p>
+      <label class="field-label" for="endpoint">プロキシのエンドポイント URL</label>
+      <input id="endpoint" type="url" placeholder="https://your-worker.workers.dev/jev" />
+      <div class="actions">
+        <button id="save-endpoint" class="ghost" type="button">保存</button>
+        <button id="forget-endpoint" class="ghost" type="button">削除してデモに戻す</button>
+      </div>
+      <p class="note">URL はこのブラウザの localStorage にだけ保存されます。</p>
+    </details>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <p>
+    確率は Jev が返す calibrated probability をそのまま表示しています。数値は「その条件で検索するのが妥当そうな度合い」の目安で、成約可能性ではありません。
+  </p>
+</footer>
+
+<script type="module" src="./assets/app.js"></script>
+</body>
+</html>

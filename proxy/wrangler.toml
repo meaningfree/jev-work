@@ -1,0 +1,7 @@
+name = "jev-search-generator-proxy"
+main = "cloudflare-worker.js"
+compatibility_date = "2026-09-01"
+
+# シークレットは wrangler secret put で登録する（このファイルには書かない）
+#   npx wrangler secret put TYPESAFE_API_KEY
+#   npx wrangler secret put ALLOWED_ORIGINS
