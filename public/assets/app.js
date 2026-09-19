@@ -1,10 +1,9 @@
-import { AXES, buildQuestions, buildState } from './questions.js';
-import { interpret, openQuestions, summaryText, pct, CONF_LOW, FLAG_ON } from './interpret.js';
+import { buildQuestions, buildState } from './questions.js';
+import { interpret, summaryText, pct, CONF_LOW, FLAG_ON } from './interpret.js';
 import { mockEvaluate } from './mock.js';
 
-const LS_KEY = 'jev-search-generator.endpoint';
-const DEMO = 'demo';
 // Worker で配信しているときは同じオリジンの /jev が中継になる。
+// 中継が無い静的配信（GitHub Pages など）ではデモモードに落ちる。
 const SAME_ORIGIN = new URL('jev', document.baseURI).href;
 
 const EXAMPLES = {
@@ -21,57 +20,28 @@ const EXAMPLES = {
 const $ = (id) => document.getElementById(id);
 const el = {
   hearing: $('hearing'), run: $('run'), clear: $('clear'), status: $('status'),
-  mode: $('mode-badge'), result: $('result'), summary: $('summary-chips'),
-  flagChips: $('flag-chips'), askmore: $('askmore'), axes: $('axes'),
+  result: $('result'), summary: $('summary-chips'),
+  flagChips: $('flag-chips'), axes: $('axes'),
   flags: $('flags'), raw: $('raw'), copy: $('copy'), copyNote: $('copy-note'),
-  endpoint: $('endpoint'), settings: $('settings-details'),
 };
 
 let lastResult = null;
 
-/* ---------- 接続先 ----------
+/* ---------- 接続先 ---------- */
 
-   保存値なし        → 同じオリジンの /jev を試し、応答すればそこに繋ぐ（Worker 配信）
-   保存値が URL      → その中継に繋ぐ
-   保存値が 'demo'   → 明示的にデモモード
-   同じオリジンに中継が無い（GitHub Pages などの静的配信）→ デモモード
-*/
+let endpoint = '';   // 空文字ならデモモード
 
-let endpoint = '';   // 実際に使う接続先。空文字ならデモモード。
-
-const savedEndpoint = () => (localStorage.getItem(LS_KEY) || '').trim();
-
-async function sameOriginProxyReady() {
+async function resolveEndpoint() {
   try {
     const res = await fetch(SAME_ORIGIN, { method: 'GET' });
-    if (!res.ok) return false;
-    const body = await res.json();
-    return body?.service === 'jev-proxy' && body?.configured === true;
+    const body = res.ok ? await res.json() : null;
+    endpoint = body?.service === 'jev-proxy' && body?.configured === true ? SAME_ORIGIN : '';
   } catch {
-    return false;   // 静的配信なら 404 か JSON でない応答になる
+    endpoint = '';   // 静的配信なら 404 か JSON でない応答になる
   }
 }
 
-async function refreshMode() {
-  const saved = savedEndpoint();
-  el.endpoint.value = saved === DEMO ? '' : saved;
-
-  if (saved === DEMO) endpoint = '';
-  else if (saved) endpoint = saved;
-  else endpoint = (await sameOriginProxyReady()) ? SAME_ORIGIN : '';
-
-  if (endpoint) {
-    el.mode.textContent = endpoint === SAME_ORIGIN && !saved
-      ? 'Jev API に接続（このサーバー経由）'
-      : 'Jev API に接続（中継サーバー経由）';
-    el.mode.classList.remove('demo');
-  } else {
-    el.mode.textContent = saved === DEMO ? 'デモモード（手動で選択中）' : 'デモモード（中継サーバーなし）';
-    el.mode.classList.add('demo');
-  }
-}
-
-let ready = refreshMode();
+const ready = resolveEndpoint();
 
 /* ---------- 推論 ---------- */
 
@@ -103,7 +73,7 @@ async function evaluate(text) {
 /* ---------- 描画 ---------- */
 
 function bars(read) {
-  const top = read.ranked[0]?.label;
+  const top = read.value;
   return read.ordered
     .map(({ label, p }) => `
       <div class="bar-row ${label === top ? 'top' : ''}">
@@ -113,8 +83,8 @@ function bars(read) {
     .join('');
 }
 
-function renderAxes(reads) {
-  el.axes.innerHTML = AXES.map((axis) => {
+function renderAxes(axes, reads) {
+  el.axes.innerHTML = axes.map((axis) => {
     const read = reads[axis.id];
     if (!read) return '';
     const conf = read.confidence != null ? `確信度 ${pct(read.confidence)}` : '';
@@ -125,14 +95,14 @@ function renderAxes(reads) {
           <h3>${axis.label}</h3>
           <span class="conf">${conf}${score}</span>
         </header>
-        <p class="hint">${axis.hint}</p>
+        ${axis.hint ? `<p class="hint">${axis.hint}</p>` : ''}
         <div class="bars">${bars(read)}</div>
       </article>`;
   }).join('');
 }
 
-function renderSummary(reads) {
-  el.summary.innerHTML = AXES.map((axis) => {
+function renderSummary(axes, reads) {
+  el.summary.innerHTML = axes.map((axis) => {
     const read = reads[axis.id];
     if (!read) return '';
     const loose = read.probability < CONF_LOW ? 'loose' : '';
@@ -153,24 +123,11 @@ function renderFlags(rows) {
     : '<span class="note">はっきり必要と読み取れたこだわり条件はありませんでした。</span>';
 }
 
-function renderAskMore(interpreted) {
-  const items = openQuestions(interpreted).map((item) =>
-    item.kind === 'axis'
-      ? `<strong>${item.label}</strong>：「${item.first.label}」と「${item.second?.label ?? '—'}」で割れています（${pct(item.first.p)} / ${pct(item.second?.p)}）
-         <span class="q">→ どちらに近いか確認したい</span>`
-      : `<strong>${item.label}</strong>：必要そうだが読み切れません（${pct(item.p)}）<span class="q">→ 条件に入れるか確認したい</span>`);
-
-  el.askmore.innerHTML = items.length
-    ? items.map((t) => `<li>${t}</li>`).join('')
-    : '<li>大きく割れている項目はありません。この条件でそのまま検索してよさそうです。</li>';
-}
-
 function render(result) {
   const interpreted = interpret(result);
-  renderSummary(interpreted.reads);
+  renderSummary(interpreted.axes, interpreted.reads);
   renderFlags(interpreted.flagRows);
-  renderAskMore(interpreted);
-  renderAxes(interpreted.reads);
+  renderAxes(interpreted.axes, interpreted.reads);
   el.raw.textContent = JSON.stringify(result, null, 2);
   lastResult = interpreted;
   el.result.hidden = false;
@@ -198,13 +155,11 @@ async function run() {
     const ms = Math.round(performance.now() - started);
     const tokens = result.usage?.input_tokens;
     el.status.textContent = result._demo
-      ? `デモモードの結果です（${ms}ms）。実際の確率は Jev の API キーを設定すると出ます。`
+      ? `デモモードの結果です（${ms}ms）。`
       : `Jev から取得しました（${ms}ms${tokens ? ` / 入力 ${tokens} トークン` : ''}）。`;
     el.result.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (error) {
-    const hint = endpoint ? '' : '\n中継サーバーの URL を設定するか、デモモードで試してください。';
-    el.status.textContent = `失敗しました: ${error.message}${hint}`;
-    el.settings.open = true;
+    el.status.textContent = `失敗しました: ${error.message}`;
   } finally {
     el.run.disabled = false;
   }
@@ -239,24 +194,4 @@ el.copy.addEventListener('click', async () => {
     el.copyNote.textContent = 'コピーできませんでした。JSON から手動で控えてください。';
   }
   setTimeout(() => (el.copyNote.textContent = ''), 3000);
-});
-
-function applyEndpoint(value, message) {
-  if (value) localStorage.setItem(LS_KEY, value);
-  else localStorage.removeItem(LS_KEY);
-  ready = refreshMode();
-  el.status.textContent = message;
-}
-
-$('save-endpoint').addEventListener('click', () => {
-  const value = el.endpoint.value.trim();
-  applyEndpoint(value, value ? '接続先を保存しました。' : '自動判定に戻しました。');
-});
-
-$('auto-endpoint').addEventListener('click', () => {
-  applyEndpoint('', '自動判定に戻しました。');
-});
-
-$('demo-endpoint').addEventListener('click', () => {
-  applyEndpoint(DEMO, 'デモモードに切り替えました。');
 });

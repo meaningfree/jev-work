@@ -3,7 +3,7 @@
  * リポジトリ直下の静的ファイルを配信しつつ、/jev を Jev API に中継する。
  * 本番の Worker と同じく画面と同一オリジンになるので CORS の問題は起きない。
  *
- *   TYPESAFE_API_KEY=sk-... node proxy/dev-server.mjs
+ *   TYPESAFE_API_KEY=apikey_... node proxy/dev-server.mjs
  *   → http://localhost:8787 を開くだけ（接続設定は不要・自動で /jev を使う）
  *
  * キー未設定でも起動する（その場合は画面がデモモードになる）。

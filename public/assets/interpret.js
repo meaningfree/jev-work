@@ -1,6 +1,6 @@
 // Jev のレスポンスを「おすすめ検索条件」に読み替える部分。
 // 画面（app.js）と CLI（proxy/try-jev.mjs）の両方から使う。
-import { AXES, FLAGS } from './questions.js';
+import { AXES, FLAGS, axesFor } from './questions.js';
 
 export const CONF_LOW = 0.45;   // 最有力でもこれ未満なら「迷っている」扱い
 export const FLAG_ON = 0.5;     // これ以上のこだわり条件はチェックを入れる
@@ -31,14 +31,20 @@ export function readAxis(axis, answer) {
 
   const levels = axis.question.criteria;
   const labelOf = (i) => answer.legend?.[String(i)] ?? levels[i];
-  const ordered = levels.map((_, i) => ({ label: labelOf(i), p: answer.probabilities?.[String(i)] ?? 0 }));
-  // おすすめ値は最も確率の高いレベル（期待値の丸めだと確率の低いレベルを指すことがある）。
-  // 期待値のほうは score として併記する。
+  const ordered = levels.map((_, i) => ({ index: i, label: labelOf(i), p: answer.probabilities?.[String(i)] ?? 0 }));
   const ranked = [...ordered].sort((a, b) => b.p - a.p);
+
+  // おすすめ値は最も確率の高いレベル。ただし分布がほぼ平らなときは先頭のレベルを
+  // 引いてしまうので、上位が拮抗している場合は期待値に近いほうを採る。
+  const expected = answer.score ?? ordered.reduce((acc, o) => acc + o.p * o.index, 0);
+  const best = ordered
+    .filter((o) => o.p >= (ranked[0]?.p ?? 0) - 0.01)
+    .reduce((a, b) => (Math.abs(b.index - expected) < Math.abs(a.index - expected) ? b : a));
+
   return {
     kind: 'score',
-    value: ranked[0]?.label,
-    probability: ranked[0]?.p ?? 0,
+    value: best.label,
+    probability: best.p,
     confidence: answer.confidence,
     score: answer.score,
     ranked,
@@ -46,7 +52,10 @@ export function readAxis(axis, answer) {
   };
 }
 
-/** レスポンス全体を読み取る。 */
+/**
+ * レスポンス全体を読み取る。
+ * axes は「取引の種類」の判定に合わせて絞り込んだ軸（賃貸なら賃料、購入なら価格）。
+ */
 export function interpret(result) {
   const answers = result?.answers || {};
   const reads = {};
@@ -54,13 +63,13 @@ export function interpret(result) {
   const flagRows = FLAGS
     .map((flag) => ({ flag, p: answers[`flag_${flag.id}`]?.noul ?? 0 }))
     .sort((a, b) => b.p - a.p);
-  return { reads, flagRows };
+  return { reads, flagRows, axes: axesFor(reads.torihiki?.value) };
 }
 
 /** 確率が割れていて、追加で聞きたい項目。 */
-export function openQuestions({ reads, flagRows }) {
+export function openQuestions({ reads, flagRows, axes = AXES }) {
   const items = [];
-  for (const axis of AXES) {
+  for (const axis of axes) {
     const read = reads[axis.id];
     if (!read || read.probability >= CONF_LOW) continue;
     items.push({ kind: 'axis', label: axis.label, first: read.ranked[0], second: read.ranked[1] });
@@ -72,9 +81,9 @@ export function openQuestions({ reads, flagRows }) {
 }
 
 /** コピー用のテキストメモ。 */
-export function summaryText({ reads, flagRows }) {
+export function summaryText({ reads, flagRows, axes = AXES }) {
   const lines = ['【おすすめ検索条件】'];
-  for (const axis of AXES) {
+  for (const axis of axes) {
     const read = reads[axis.id];
     if (read) lines.push(`- ${axis.label}: ${read.value}（${pct(read.probability)}）`);
   }

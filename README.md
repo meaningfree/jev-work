@@ -42,7 +42,7 @@ API キーもフロントには置けないので、キーを持つ中継を 1 �
 
 ```bash
 npx wrangler deploy                        # public/ と worker.js がまとめて上がる
-npx wrangler secret put TYPESAFE_API_KEY   # sk-... を貼る
+npx wrangler secret put TYPESAFE_API_KEY   # apikey_... を貼る
 ```
 
 出力された `https://jev-search-generator.<アカウント>.workers.dev` を開けばそのまま実 API で動く。
@@ -53,14 +53,14 @@ npx wrangler secret put TYPESAFE_API_KEY   # sk-... を貼る
 Cloudflare の実行環境そのままで試す場合:
 
 ```bash
-echo 'TYPESAFE_API_KEY="sk-..."' > .dev.vars   # .gitignore 済み
+echo 'TYPESAFE_API_KEY="apikey_..."' > .dev.vars   # .gitignore 済み
 npx wrangler dev                               # → http://localhost:8787
 ```
 
 Node だけで済ませたい場合（Cloudflare アカウント不要）:
 
 ```bash
-TYPESAFE_API_KEY=sk-... node proxy/dev-server.mjs   # → http://localhost:8787
+TYPESAFE_API_KEY=apikey_... node proxy/dev-server.mjs   # → http://localhost:8787
 ```
 
 どちらも画面と `/jev` が同一オリジンになるので、本番と同じ経路で確認できる。
@@ -71,26 +71,21 @@ TYPESAFE_API_KEY=sk-... node proxy/dev-server.mjs   # → http://localhost:8787
 画面と同じ質問定義で 1 回だけ実 API を叩く。
 
 ```bash
-TYPESAFE_API_KEY=sk-... node proxy/try-jev.mjs "夫婦と子ども2人。いま2LDKで手狭で購入を検討中。..."
-TYPESAFE_API_KEY=sk-... node proxy/try-jev.mjs --json "..."   # 生レスポンス
+TYPESAFE_API_KEY=apikey_... node proxy/try-jev.mjs "夫婦と子ども2人。いま2LDKで手狭で購入を検討中。..."
+TYPESAFE_API_KEY=apikey_... node proxy/try-jev.mjs --json "..."   # 生レスポンス
 ```
 
-おすすめ条件・まだ聞けていないこと・全選択肢の分布に加えて、レイテンシと入力トークン数・概算コストが出る。
+おすすめ条件・確率が割れている項目・全選択肢の分布に加えて、レイテンシと入力トークン数・概算コストが出る（画面には割れている項目の一覧は出していないが、質問文の調整時に見たいので CLI には残してある）。
 
 ### 4. デモだけ公開したい場合
 
 `public/` の中身をそのまま GitHub Pages などの静的ホスティングに置けば、デモモードのページとして動く。
 中継が無いので実 API にはつながらない。
 
-### 接続先を手で指定したいとき
-
-画面下部の「API の接続設定」に別に立てた中継の URL を入れると、そちらを使う。
-設定はブラウザの localStorage にだけ保存され、「自動に戻す」で元に戻る。
-
 ## Jev の API キーと支払いについて
 
-- キーの発行は [console.typesafe.ai/settings/keys](https://console.typesafe.ai/settings/keys)（2026/09 時点で early access、ウェイトリスト経由）。
-- 料金は**入力 100 万トークンあたり $0.042 / 出力は無料**。このアプリの 1 リクエストは質問定義込みで 3,000〜3,500 トークン程度（実測: 2,401 トークン / 444ms / jev-1.13.0）なので、**1 回およそ $0.0001（0.02 円前後）**。1 万回叩いて 1〜2 ドル。
+- キーは `apikey_` で始まる 108 文字の文字列（`sk-` ではない）。発行は [console.typesafe.ai/settings/keys](https://console.typesafe.ai/settings/keys)（2026/09 時点で early access、ウェイトリスト経由）。
+- 料金は**入力 100 万トークンあたり $0.042 / 出力は無料**。このアプリの 1 リクエストは質問定義込みで 4,500 トークン程度（26 問。実測: 20 問で 2,401 トークン / 444ms / jev-1.13.0）なので、**1 回およそ $0.0002（0.03 円前後）**。1 万回叩いて 1〜2 ドル。
 - 支払いはクレジット前払い方式（コンソールの Billing でクレジットを購入、残高が閾値を下回ったときの自動追加はオプトイン）。明示的な無料枠は公表されていないので、残高ゼロだと `402` / `403` が返る。まずはキーだけでそのまま叩いてみて、エラーが出たらクレジットを買えばよい。
 - TypeSafe に直接登録したくない場合は、Cloudflare Workers AI（モデル ID `typesafe/jev`）や Vercel AI Gateway 経由でも同じモデルを呼べる。その場合は Cloudflare / Vercel 側の課金になり、`proxy/upstream.mjs` の `UPSTREAM` をそちらに差し替える。
 
@@ -100,20 +95,25 @@ TYPESAFE_API_KEY=sk-... node proxy/try-jev.mjs --json "..."   # 生レスポン�
 
 | 質問型 | 返るもの | 使っている軸 |
 | --- | --- | --- |
-| `choice` | 選択肢ごとの確率＋確信度 | 取引の種類（賃貸/購入）、建物種別、間取り、エリアの性格、最重視する軸 |
-| `score` | 順序つきレベルごとの確率＋期待値 | 広さ、駅からの距離、築年数、予算の優先度、入居時期の急ぎ度 |
-| `noul` | はい/いいえの確率（0〜1） | ペット可・駐車場・日当たり などのこだわり条件 10 件 |
+| `choice` | 選択肢ごとの確率＋確信度 | 取引の種類（賃貸/購入）、建物種別、間取り、エリアの絞り方、最優先する条件 |
+| `score` | 順序つきレベルごとの確率＋期待値 | 賃料の上限、物件価格の上限、専有面積の下限、駅からの徒歩分数、築年数 |
+| `noul` | はい/いいえの確率（0〜1） | ペット相談可・駐車場あり・オートロック・即入居可 などのこだわり条件 16 件 |
 
-`noul` には `criteria` で true / false の条件を明示している。これが無いと、入力に手がかりの無いこだわり条件まで 0.4〜0.5 に張り付き、「まだ聞けていないこと」が水増しされる。
+`noul` には `criteria` で true / false の条件を明示している。これが無いと、入力に手がかりの無いこだわり条件まで 0.4〜0.5 に張り付いてしまう。
 
 リクエストは 1 回で全質問を評価する（Jev は 1 リクエストに複数の質問を入れられる）。
 
-画面では 3 つの見せ方をしている。
+選択肢のラベルは、そのままポータルの絞り込み欄に入れられる文言にしてある（`駅徒歩5分以内` `築3年以内` `賃料10万円以下` `面積40㎡以上`）。
+LIFULL HOME'S の[賃貸検索](https://www.homes.co.jp/chintai/tokyo/list/)の絞り込み項目（賃料／間取り／専有面積／駅徒歩／築年数／こだわり条件）に合わせている。
 
-1. **おすすめ検索条件** — 各軸の最有力候補と、その確率。
-2. **まだ聞けていないこと** — 確率が割れている軸（最有力でも 45% 未満）と、判断がつかないこだわり条件。
-   これが「条件が明確でない人」向けの本命で、*次に何を聞けば条件が締まるか* がそのまま出る。
-3. **項目ごとの確率** — 全選択肢の分布。候補の 2 番手を見ながら条件を緩める判断に使う。
+賃料と価格はどちらも毎回評価し、**取引の種類の判定に合わせて表示を出し分ける**（賃貸なら賃料、購入なら価格）。`assets/questions.js` の `appliesTo` と `axesFor()` がその部分。
+
+画面では 2 つの見せ方をしている。
+
+1. **おすすめ検索条件** — 各軸の最有力候補と、その確率。確率が割れている（最有力でも 45% 未満）条件は黄色くして、決めきれていないことが分かるようにしている。
+2. **項目ごとの確率** — 全選択肢の分布。候補の 2 番手を見ながら条件を緩める判断に使う。
+
+`score` 軸のおすすめ値は最頻レベルを採るが、分布がほぼ平らなときは先頭のレベルを引いてしまうので、上位が拮抗している場合は期待値に近いレベルを選んでいる（`assets/interpret.js`）。
 
 条件を足したい・言い換えたいときは `assets/questions.js` の `AXES` / `FLAGS` に足すだけでよい。UI もコピー用メモも自動で追従する。
 
