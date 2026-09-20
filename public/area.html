@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>くらしの希望から住むエリアを探す</title>
+<meta name="description" content="住まいの希望を書くだけで、首都圏の主要100駅から住むのにおすすめのエリアを確率つきで並べます（Jev / TypeSafe System One のお試し）" />
+<link rel="stylesheet" href="./assets/styles.css" />
+</head>
+<body>
+<header class="site-header">
+  <nav class="site-nav">
+    <a href="./index.html">検索条件をつくる</a>
+    <a href="./area.html" aria-current="page">住むエリアを探す</a>
+  </nav>
+  <h1>くらしの希望から<wbr />住むエリアを探す</h1>
+  <p class="lead">
+    首都圏の主要 100 駅を、Jev に 1 駅ずつ「この人におすすめできるか」で評価させて並べます。
+    渡しているのは<strong>駅名だけ</strong>で、沿線・所要時間・家賃相場といった情報は与えていません。
+  </p>
+</header>
+
+<main>
+  <section class="card">
+    <label class="field-label" for="hearing">住まいについて決まっていること・思っていること</label>
+    <div class="examples">
+      <span class="examples-label">例を入れる：</span>
+      <button class="chip" type="button" data-example="dual">共働き・保育園</button>
+      <button class="chip" type="button" data-example="single">初めての一人暮らし</button>
+      <button class="chip" type="button" data-example="buy">購入・子育て重視</button>
+      <button class="chip" type="button" data-example="remote">リモート中心・広さ重視</button>
+    </div>
+    <textarea id="hearing" rows="7" placeholder="例）共働きの夫婦＋0歳の子ども。私の職場は大手町、妻は品川。保育園に入れたいので待機児童が少ないところがいい。通勤はどちらも40分くらいまで。家賃は15万円くらいまで。休日に歩ける公園があると嬉しい。"></textarea>
+    <div class="actions">
+      <button id="run" class="primary" type="button">おすすめのエリアを出す</button>
+      <button id="clear" class="ghost" type="button">クリア</button>
+    </div>
+    <p class="note" id="status" role="status" aria-live="polite"></p>
+  </section>
+
+  <section id="result" class="result" hidden>
+    <div class="card">
+      <h2>住むのにおすすめのエリア</h2>
+      <p class="note" id="stats"></p>
+      <p class="note">確率は Jev が返した値そのままで、濃いバーは 100 駅の中で上位 1/4 に入った駅です。確率の絶対値は入力によって全体が上下する（同じ 40% でも意味が変わる）ので、絶対値よりも順位と差のつき方で読んでください。</p>
+      <ol id="rank" class="rank"></ol>
+      <div class="summary-actions">
+        <button id="copy" class="ghost" type="button">結果をコピー</button>
+        <span class="note" id="copy-note"></span>
+      </div>
+    </div>
+
+    <h2 class="section-title">Jev の見立て</h2>
+    <p class="note nav-note">上位の駅が妥当かを判断するための材料です。駅の選定そのものには使っていません。</p>
+    <div id="axes" class="axes"></div>
+
+    <div class="card">
+      <h2>100駅すべての評価</h2>
+      <p class="note">都県ごとに、おすすめ度の高い順。全部が同じくらいの確率なら、駅名だけでは判断できていないということです。</p>
+      <div id="all-stations"></div>
+    </div>
+
+    <details class="card">
+      <summary>Jev に投げたリクエスト（駅名しか渡していないことの確認用）</summary>
+      <pre id="request"></pre>
+    </details>
+
+    <details class="card">
+      <summary>Jev のレスポンス（JSON）</summary>
+      <pre id="raw"></pre>
+    </details>
+  </section>
+</main>
+
+<script type="module" src="./assets/area-app.js"></script>
+</body>
+</html>
