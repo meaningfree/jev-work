@@ -156,3 +156,56 @@ pre {
 details summary { cursor: pointer; font-weight: 600; }
 
 code { background: var(--bg); padding: 1px 5px; border-radius: 4px; font-size: .85em; }
+
+/* ---------- エリアページ（area.html） ---------- */
+
+.site-nav { display: flex; gap: 6px; margin: 0 0 14px; flex-wrap: wrap; }
+.site-nav a {
+  padding: 5px 12px; border-radius: 999px; font-size: .82rem; text-decoration: none;
+  border: 1px solid var(--border); color: var(--muted);
+}
+.site-nav a:hover { border-color: var(--accent); color: var(--accent); }
+.site-nav a[aria-current="page"] {
+  background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 700;
+}
+
+.nav-note { margin: -4px 0 12px; }
+
+.rank { list-style: none; margin: 12px 0 0; padding: 0; counter-reset: rank; display: grid; gap: 6px; }
+/* 先頭の ::before（順位）も grid のアイテムになるので、列は 5 つ用意する。 */
+.rank-row {
+  display: grid; grid-template-columns: auto auto auto 1fr auto; gap: 10px;
+  align-items: center; font-size: .9rem;
+  padding: 6px 10px; border-radius: 8px; background: var(--bg);
+}
+.rank-row::before {
+  counter-increment: rank; content: counter(rank);
+  font-size: .75rem; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 1.4em;
+}
+.rank-name { font-weight: 700; }
+.rank-row.weak .rank-name { font-weight: 400; color: var(--muted); }
+.pref-tag { font-size: .7rem; color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px; white-space: nowrap; }
+.rank-bar { position: relative; height: 10px; border-radius: 999px; background: var(--border); overflow: hidden; min-width: 60px; }
+.rank-bar .fill { position: absolute; inset: 0 auto 0 0; background: var(--bar); border-radius: 999px; }
+.rank-row.strong .rank-bar .fill { background: var(--bar-top); }
+.rank-row.weak .rank-bar .fill { opacity: .6; }
+.rank-val { font-variant-numeric: tabular-nums; font-size: .8rem; color: var(--muted); min-width: 3em; text-align: right; }
+
+/* 幅が足りないと駅名とバーが潰れるので、バーだけ 2 段目に落とす。
+   自動配置だと順位・駅名・%の並びが崩れるので、位置を明示する。 */
+@media (max-width: 560px) {
+  .rank-row { grid-template-columns: auto 1fr auto auto; row-gap: 5px; column-gap: 8px; }
+  .rank-row::before { grid-area: 1 / 1; }
+  .rank-name { grid-area: 1 / 2; }
+  .pref-tag { grid-area: 1 / 3; }
+  .rank-val { grid-area: 1 / 4; }
+  .rank-bar { grid-area: 2 / 1 / 3 / -1; }
+}
+
+.bar-row.strong .bar-label { font-weight: 700; }
+.bar-row.strong .fill { background: var(--bar-top); opacity: .35; }
+.bar-row.weak .bar-label { color: var(--muted); }
+
+.pref-group { border-top: 1px solid var(--border); padding: 10px 0 0; margin-top: 10px; }
+.pref-group summary { font-size: .88rem; font-weight: 600; }
+.pref-group .bars { margin-top: 10px; }
