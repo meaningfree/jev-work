@@ -1,17 +1,13 @@
 /**
  * Jev API を叩く部分の共通処理。
- * Worker（本番）とローカルの dev-server から同じものを使う。
+ * Worker（本番）・ローカルの dev-server・providers.mjs から同じものを使う。
+ *
+ * リクエストの検証と、Jev 以外のモデル（OpenAI / Gemini）への振り分けは
+ * providers.mjs 側にある。
  */
 
 export const UPSTREAM = 'https://api.typesafe.ai/v1/systemone';
 export const MAX_BODY_BYTES = 64 * 1024;
-
-/** リクエストボディの検証。問題なければ null、あればエラー文字列を返す。 */
-export function validate(payload) {
-  if (!payload || typeof payload !== 'object') return 'invalid JSON';
-  if (!payload.state || !payload.questions) return 'state and questions are required';
-  return null;
-}
 
 /** API キーを付けて Jev に転送する。fetch の Response をそのまま返す。 */
 export function callJev(apiKey, payload) {

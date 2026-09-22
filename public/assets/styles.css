@@ -209,3 +209,57 @@ code { background: var(--bg); padding: 1px 5px; border-radius: 4px; font-size: .
 .pref-group { border-top: 1px solid var(--border); padding: 10px 0 0; margin-top: 10px; }
 .pref-group summary { font-size: .88rem; font-weight: 600; }
 .pref-group .bars { margin-top: 10px; }
+
+/* ---------- 比較ページ（compare.html） ---------- */
+
+.model-picker { display: grid; gap: 8px; }
+.model-opt {
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--bg); font-size: .9rem; cursor: pointer;
+}
+.model-opt:hover { border-color: var(--accent); }
+.model-opt.off { opacity: .55; cursor: not-allowed; }
+.model-opt input { accent-color: var(--accent); }
+.model-name { font-weight: 700; }
+.model-id { font-size: .75rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+th .model-id { display: block; font-weight: 400; }
+
+/* 列が増えると狭い画面で溢れるので、表だけ横スクロールさせる。 */
+.table-wrap { overflow-x: auto; }
+
+table.cmp { width: 100%; border-collapse: collapse; font-size: .85rem; }
+table.cmp th, table.cmp td { padding: 6px 10px; text-align: left; white-space: nowrap; }
+table.cmp thead th { font-size: .75rem; color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--border); }
+table.cmp tbody th { font-weight: 600; }
+table.cmp tbody tr + tr th, table.cmp tbody tr + tr td { border-top: 1px solid var(--border); }
+table.cmp td { font-variant-numeric: tabular-nums; }
+table.cmp tr.failed td { color: var(--warn); white-space: normal; }
+table.cmp tr.split th { color: var(--warn); }
+
+/* 確率セル。バーは背景に敷いて、数字はその上に置く。 */
+table.matrix tbody th { font-weight: 400; white-space: normal; min-width: 8em; }
+/* text-align は table.cmp td のほうが詳細度が高いので、同じ強さで上書きする。 */
+table.cmp td.p-cell { position: relative; min-width: 5.5em; text-align: right; z-index: 0; }
+.p-fill {
+  position: absolute; inset: 3px auto 3px 0; background: var(--bar);
+  border-radius: 4px; z-index: -1;
+}
+.p-cell.lead { font-weight: 700; }
+.p-cell.lead .p-fill { background: var(--bar-top); opacity: .35; }
+.p-text { position: relative; }
+
+.badge {
+  font-size: .72rem; padding: 2px 8px; border-radius: 999px; white-space: nowrap;
+  background: var(--accent-soft); color: var(--accent);
+}
+.badge.warn { background: var(--warn-soft); color: var(--warn); }
+
+.tag {
+  font-size: .68rem; margin-left: 6px; padding: 1px 7px; border-radius: 999px;
+  border: 1px solid var(--border); color: var(--muted); font-weight: 400;
+}
+
+.axes-compare { display: grid; gap: 16px; margin: 0 0 16px; }
+.axes-compare .axis .hint { margin-bottom: 8px; }
+.axes-compare .axis .hint strong { color: var(--text); }

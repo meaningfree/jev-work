@@ -1,11 +1,12 @@
 # くらしの希望から検索条件・住むエリアをつくる
 
-住み替えの希望を自由入力で書いてもらい、Jev に**確率つきで答えさせる**小さな Web アプリ。画面は 2 つある。
+住み替えの希望を自由入力で書いてもらい、Jev に**確率つきで答えさせる**小さな Web アプリ。画面は 3 つある。
 
 | 画面 | やること |
 | --- | --- |
 | `index.html` | **不動産ポータル（ホームズ・スーモなど）の検索条件**を確率つきで提案する |
 | `area.html` | **首都圏の主要 100 駅**を 1 駅ずつ評価して、住むのにおすすめのエリアを並べる |
+| `compare.html` | **同じ質問を Jev / OpenAI / Gemini に投げて**、返ってきた確率を並べて比べる |
 
 「何をどう絞ればいいか分からない人」に、すでに決まっている情報から検索条件やエリアを組み立ててもらうための補助が狙い。
 
@@ -26,13 +27,20 @@ public/assets/area-interpret.js   レスポンスを順位に読み替える部�
 public/assets/area-app.js         画面の組み立て・API 呼び出し
 public/assets/area-mock.js        エリア画面のデモ用ダミー推論
 
-public/assets/styles.css          両方の画面で共用
-worker.js                         画面の配信と Jev への中継を兼ねる Cloudflare Worker
+public/compare.html               画面（モデル比較）
+public/assets/compare.js          ★ 複数モデルの結果を突き合わせる部分（画面と CLI で共用）
+public/assets/compare-app.js      画面の組み立て・API 呼び出し
+
+public/assets/examples.js         入力例（検索条件ページと比較ページで共用）
+public/assets/styles.css          3 つの画面で共用
+worker.js                         画面の配信と各モデルへの中継を兼ねる Cloudflare Worker
 wrangler.toml                     その設定（public/ を配信し、/jev だけ worker.js が処理する）
 proxy/upstream.mjs                Jev に投げる部分（Worker とローカル用サーバーで共用）
+proxy/providers.mjs               ★ 質問定義を OpenAI / Gemini 用に変換して呼ぶ部分
 proxy/dev-server.mjs              ローカル確認用（Node だけで動く。静的配信＋中継）
 proxy/try-jev.mjs                 検索条件のほうを 1 回だけ叩く CLI
 proxy/try-area.mjs                エリアのほうを 1 回だけ叩く CLI
+proxy/try-compare.mjs             同じ質問を複数モデルに投げて比べる CLI
 ```
 
 ## なぜ中継サーバーが要るのか
@@ -58,6 +66,8 @@ API キーもフロントには置けないので、キーを持つ中継を 1 �
 ```bash
 npx wrangler deploy                        # public/ と worker.js がまとめて上がる
 npx wrangler secret put TYPESAFE_API_KEY   # apikey_... を貼る
+npx wrangler secret put OPENAI_API_KEY     # 比較ページを使う場合だけ（任意）
+npx wrangler secret put GEMINI_API_KEY     # 同上（任意）
 ```
 
 出力された `https://jev-search-generator.<アカウント>.workers.dev` を開けばそのまま実 API で動く。
@@ -72,11 +82,15 @@ echo 'TYPESAFE_API_KEY="apikey_..."' > .dev.vars   # .gitignore 済み
 npx wrangler dev                               # → http://localhost:8787
 ```
 
+比較ページも試すなら `.dev.vars` に `OPENAI_API_KEY` / `GEMINI_API_KEY` も足す。
+
 Node だけで済ませたい場合（Cloudflare アカウント不要）:
 
 ```bash
 TYPESAFE_API_KEY=apikey_... node proxy/dev-server.mjs   # → http://localhost:8787
 ```
+
+キーは環境変数から読むので、比較ページを使うなら `OPENAI_API_KEY=... GEMINI_API_KEY=...` も一緒に渡す。
 
 どちらも画面と `/jev` が同一オリジンになるので、本番と同じ経路で確認できる。
 キーを渡さずに起動すると画面はデモモードになる。
@@ -98,6 +112,16 @@ node proxy/try-area.mjs --dry-run "..."     # 投げずにリクエストだけ�
 ```
 
 `--dry-run` は「駅名以外を渡していない」ことを確認するためのもの。
+
+モデル比較は `proxy/try-compare.mjs`。キーのあるモデルだけを自動で選んで同時に投げる。
+
+```bash
+TYPESAFE_API_KEY=apikey_... OPENAI_API_KEY=sk-... GEMINI_API_KEY=... \
+  node proxy/try-compare.mjs "夫婦と子ども2人。いま2LDKで手狭..."
+
+node proxy/try-compare.mjs --models jev,openai "..."   # 使うモデルを選ぶ
+node proxy/try-compare.mjs --prompt                    # 生成モデルに渡すプロンプトを表示（キー不要）
+```
 
 おすすめ条件・確率が割れている項目・全選択肢の分布に加えて、レイテンシと入力トークン数・概算コストが出る（画面には割れている項目の一覧は出していないが、質問文の調整時に見たいので CLI には残してある）。
 
@@ -193,12 +217,64 @@ Jev が駅名だけでどこまで妥当に選べるかを見るのが目的な�
 
 というようにしている。順位は信用できるが、絶対値は信用しすぎないほうがよい、という読み方。
 
+## モデルを比べるほうの仕組み（compare.html）
+
+**検索条件ページとまったく同じ `questions.js`（26 問）と同じ `state`** を、Jev と汎用の生成モデルに投げて並べる。
+比較のために質問を書き直したりはしていないので、`index.html` で出るのと同じ問いへの答えがそのまま並ぶ。
+
+問題は「Jev の型つき質問を、文章生成モデルにどう答えさせるか」で、そこは `proxy/providers.mjs` が
+質問定義を機械的に JSON スキーマとプロンプトへ変換している。
+
+| Jev の質問型 | 生成モデルに要求するスキーマ |
+| --- | --- |
+| `choice` | 選択肢のラベルをキーにした数値オブジェクト（合計 1.0） |
+| `score` | レベル番号をキーにした数値オブジェクト（合計 1.0） |
+| `noul` | true である確率の数値ひとつ（0〜1） |
+
+OpenAI は `response_format: json_schema`（`strict: true`）、Gemini は `generationConfig.responseSchema` で、
+どちらも**スキーマに書いた選択肢以外は返せない**状態にしてある。`instructions` と `criteria` の文面は
+Jev に渡しているものをそのまま展開して渡す（`node proxy/try-compare.mjs --prompt` で全文が見られる）。
+
+返ってきた JSON は Jev のレスポンスと同じ形（`answers` / `usage` / `model`）に直しているので、
+`interpret.js` はどのモデルの結果でもそのまま読める。確率の合計が 1.0 からずれて返ってきた場合は正規化する。
+
+モデル ID は環境変数で差し替えられる（`OPENAI_MODEL` / `GEMINI_MODEL` / `JEV_MODEL`）。
+既定は `gpt-4.1-mini` と `gemini-2.5-flash`。
+
+### 何を比べているか
+
+画面（と CLI）で出しているのは次の 4 つ。
+
+1. **結論の一致** — 最有力候補が同じか。検索条件の軸（`choice` / `score`）とこだわり条件（`noul` 16 件）を分けて一致数で出す。
+2. **分布のずれ** — 最有力が同じでも確率の付き方は違う。total variation distance（`0.5 × Σ|p−q|`）の平均で見る。0 なら確率まで一致、1 なら重なりゼロ。
+3. **確率の振り切り方** — 最有力候補に付いた確率の平均。高いほど 1 つに振り切っていて、低いほど迷いを確率に残している。**振り切っているほうが正しいわけではない**（入力に書かれていないことまで決め打ちしている可能性がある）。このアプリのように「割れている条件は人間に聞き直す」使い方だと、ここの差がそのまま体験の差になる。
+4. **時間とコスト** — レイテンシ・入出力トークン・概算コスト。
+
+「どちらが正解か」は**この画面では判定できない**（正解ラベルが無い）。
+分かるのは一致・不一致と、確率の付き方の癖まで。正解を測りたいなら、人手でラベルを付けた入力セットが別に要る。
+
+### コストの桁が変わる
+
+Jev は**出力が無料**で入力 100 万トークンあたり $0.042。生成モデルは入力・出力とも課金され、単価も 1 桁上（参考値: 入力 $0.3〜0.4、出力 $1.6〜2.5）。
+同じ 26 問でも 1 回あたりのコストは**十数倍から数十倍**変わる。単価は `proxy/providers.mjs` の `PROVIDERS.*.price` に置いてあるので、変わったらそこだけ直せばよい（表示は概算）。
+
+また生成モデル側は、26 問ぶんの数値を JSON で書き出す=出力トークンが増えるぶん、レイテンシも Jev より長くなりやすい。
+
+### 実行結果の読み方
+
+- キーが 1 つしか設定されていないモデルは選択できない（選べるモデルが 2 つ未満なら実行できない）。
+- 1 つのモデルが失敗しても、残りだけで比較を続ける（失敗したモデルは「実行結果」の表にエラーが出る）。
+- 中継が無い（デモモード）と、キーワードマッチのダミーに癖を付けた 3 つの結果が並ぶ。**画面の動きを見るためだけのもので、実際のモデルの挙動ではない。**
+- OpenAI / Gemini 経路は、それぞれの structured output の仕様に合わせて書いてスタブで通し確認まではしてあるが、**実キーでの疎通は未確認**。初回は `--models jev,openai` のように 1 つずつ足して試すのが早い。モデル ID と単価も既定値のままなので、使う前に確認すること。
+
 ## 注意
 
 - 確率は Jev が返す calibrated probability をそのまま表示している。「その条件で検索するのが妥当そうな度合い」であって、成約率や物件の当たりやすさではない。
 - エリアのほうは駅名だけを手がかりにした Jev の判断で、実際の家賃相場・保育園の空き・治安などを参照しているわけではない。街の当たりをつける用途にとどめ、裏取りは別でやること。
 - 対象の 100 駅は手で選んだもの（`area-stations.js`）。ここに無い駅は、どれだけ条件に合っていても出てこない。
 - ポータルサイトへの検索 URL 生成まではやっていない（各社のクエリ仕様に依存するため）。条件はテキストでコピーできる。
-- 公開した `/jev` は**誰でも叩ける**。呼ばれた分だけこちらのクレジットを消費する（検索条件で 1 回 $0.0002、エリアで $0.0007 程度）。
+- 比較ページで出る一致率は、その 1 回の入力についての一致率でしかない。モデルの優劣を測ったものではないし、正解と照合してもいない。
+- `OPENAI_API_KEY` / `GEMINI_API_KEY` を設定しなければ比較ページは選択肢が出ないだけで、他の 2 画面は今までどおり動く。
+- 公開した `/jev` は**誰でも叩ける**。呼ばれた分だけこちらのクレジットを消費する（検索条件で 1 回 $0.0002、エリアで $0.0007 程度。比較ページは生成モデルのぶん桁が上がる）。
   気になる場合は Cloudflare の Rate Limiting を当てるか、`worker.js` で共有シークレットのヘッダを要求する。
   なお Origin ヘッダでの制限は curl などからは簡単に詐称できるので、対策にはならない。

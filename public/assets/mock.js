@@ -1,6 +1,10 @@
 // デモモード用のダミー推論。
 // Jev の API キーがまだ無い状態でも UI を触れるようにするためのもので、
 // 中身は単純なキーワードマッチ。レスポンスの形だけ Jev に合わせてある。
+//
+// 比較ページ（compare.html）のデモモードでは、同じキーワードマッチに
+// モデルごとの癖を模した加工（jitter / sharpen）をかけて複数の結果を作る。
+// あくまで画面の動きを見るためのダミーで、実際のモデルの挙動ではない。
 import { AXES, FLAGS } from './questions.js';
 
 // choice 軸: 選択肢 -> 加点キーワード
@@ -122,18 +126,37 @@ function softmax(weights) {
 
 const round = (n, digits = 3) => Number(n.toFixed(digits));
 
-export function mockEvaluate(text) {
+// 文字列から 0〜1 の決まった値を作る（同じ入力なら毎回同じ結果になるように）。
+function hash01(str) {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 16777619);
+  return (h >>> 0) / 4294967295;
+}
+
+/**
+ * デモ用のダミー推論。
+ *
+ * options.jitter  … 0 より大きいと、キーワード一致の重みを決まった量だけ揺らす
+ * options.sharpen … 1 より大きいと分布を尖らせる（1 つに振り切るモデルの模擬）
+ * options.label   … レスポンスの model 名
+ */
+export function mockEvaluate(text, options = {}) {
+  const { jitter = 0, sharpen = 1, label = 'demo-keyword-matcher' } = options;
   const answers = {};
+
+  // jitter が 0 のときは元の重みをそのまま返す（index.html のデモは今までどおり）。
+  const tweak = (weight, seed) =>
+    (jitter ? weight * (1 + jitter * (hash01(`${label}:${seed}`) - 0.5) * 2) : weight) ** sharpen;
 
   for (const axis of AXES) {
     const q = axis.question;
     if (q.type === 'choice') {
-      const options = Object.keys(q.criteria);
+      const labels = Object.keys(q.criteria);
       const table = CHOICE_HINTS[axis.id] || {};
-      const weights = softmax(options.map((o) => 1 + 2.4 * hits(text, table[o])));
+      const weights = softmax(labels.map((o) => tweak(1 + 2.4 * hits(text, table[o]), `${axis.id}/${o}`)));
       const probabilities = {};
-      options.forEach((o, i) => (probabilities[o] = round(weights[i])));
-      const best = options[weights.indexOf(Math.max(...weights))];
+      labels.forEach((o, i) => (probabilities[o] = round(weights[i])));
+      const best = labels[weights.indexOf(Math.max(...weights))];
       answers[axis.id] = {
         type: 'choice',
         choice: best,
@@ -143,7 +166,7 @@ export function mockEvaluate(text) {
     } else {
       const levels = q.criteria;
       const table = SCORE_HINTS[axis.id] || {};
-      const weights = softmax(levels.map((_, i) => 1 + 2.4 * hits(text, table[i])));
+      const weights = softmax(levels.map((_, i) => tweak(1 + 2.4 * hits(text, table[i]), `${axis.id}/${i}`)));
       const probabilities = {};
       const legend = {};
       levels.forEach((label, i) => {
@@ -162,11 +185,18 @@ export function mockEvaluate(text) {
 
   for (const flag of FLAGS) {
     const n = hits(text, FLAG_HINTS[flag.id]);
+    const base = n === 0 ? 0.06 : Math.min(0.5 + 0.12 * n, 0.97);
+    const shifted = jitter ? base + jitter * (hash01(`${label}:flag/${flag.id}`) - 0.45) : base;
     answers[`flag_${flag.id}`] = {
       type: 'noul',
-      noul: round(n === 0 ? 0.06 : Math.min(0.5 + 0.12 * n, 0.97)),
+      noul: round(Math.min(Math.max(shifted, 0.01), 0.99)),
     };
   }
 
-  return { model: 'demo-keyword-matcher', answers, usage: { input_tokens: 0, output_tokens: 0 }, _demo: true };
+  return {
+    model: label,
+    answers,
+    usage: { input_tokens: 0, output_tokens: 0 },
+    _demo: true,
+  };
 }

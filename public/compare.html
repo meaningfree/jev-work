@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Jev と OpenAI・Gemini を比べる</title>
+<meta name="description" content="同じヒアリング文・同じ型つき質問を Jev / OpenAI / Gemini に投げて、返ってきた確率を並べて比べます（Jev / TypeSafe System One のお試し）" />
+<link rel="stylesheet" href="./assets/styles.css" />
+</head>
+<body>
+<header class="site-header">
+  <nav class="site-nav">
+    <a href="./index.html">検索条件をつくる</a>
+    <a href="./area.html">住むエリアを探す</a>
+    <a href="./compare.html" aria-current="page">モデルを比べる</a>
+  </nav>
+  <h1>Jev と OpenAI・Gemini を<wbr />比べる</h1>
+  <p class="lead">
+    「検索条件をつくる」と<strong>まったく同じ質問定義（26問）と同じ state</strong> を、Jev と汎用の生成モデルに投げて、
+    返ってきた確率を並べます。生成モデル側は structured output で同じ選択肢に確率を書かせているので、
+    答えの一致・不一致だけでなく、確率の付き方の違いまで比べられます。
+  </p>
+</header>
+
+<main>
+  <section class="card">
+    <label class="field-label" for="hearing">いま決まっていること・思っていること</label>
+    <div class="examples">
+      <span class="examples-label">例を入れる：</span>
+      <button class="chip" type="button" data-example="family">子育て中・購入検討</button>
+      <button class="chip" type="button" data-example="single">初めての一人暮らし</button>
+      <button class="chip" type="button" data-example="senior">親との住み替え</button>
+      <button class="chip" type="button" data-example="remote">リモート中心・移住も視野</button>
+    </div>
+    <textarea id="hearing" rows="6" placeholder="例）夫婦と子ども2人（4歳・1歳）。いま2LDKの賃貸で手狭になってきたので購入を検討中。夫の職場は品川で、電車で40分くらいまでなら許容。子どもを走らせられる公園が近くにあって、静かな住宅地がいい。車も買う予定。予算はあまり余裕がない。"></textarea>
+
+    <h3>比べるモデル</h3>
+    <div id="model-picker" class="model-picker"><span class="note">読み込み中…</span></div>
+    <p class="note" id="picker-note"></p>
+
+    <div class="actions">
+      <button id="run" class="primary" type="button">同じ質問を投げて比べる</button>
+      <button id="clear" class="ghost" type="button">クリア</button>
+    </div>
+    <p class="note" id="status" role="status" aria-live="polite"></p>
+  </section>
+
+  <section id="result" class="result" hidden>
+    <div class="card">
+      <h2>実行結果</h2>
+      <div id="runs" class="table-wrap"></div>
+      <p class="note">
+        コストは入力・出力トークン数に公表単価を掛けた概算です（単価は <code>proxy/providers.mjs</code> に書いてあります）。
+        Jev は出力が無料なので、同じ質問でも桁が変わります。
+      </p>
+    </div>
+
+    <div class="card">
+      <h2>どれくらい一致したか</h2>
+      <div id="pairs" class="table-wrap"></div>
+      <p class="note">
+        「分布のずれ」は total variation distance の平均（0 なら確率の付き方まで一致、1 なら重なりゼロ）。
+        最有力の答えが同じでも、確率の付き方が違えば「決めきれているかどうか」の読みは変わります。
+      </p>
+    </div>
+
+    <div class="card">
+      <h2>確率の振り切り方</h2>
+      <div id="decisiveness" class="table-wrap"></div>
+      <p class="note">
+        最有力候補に付いた確率の平均。値が高いほど「1 つに振り切っている」、低いほど「迷いを確率に残している」ことを表します。
+        振り切っているほうが正しいわけではありません（入力に書かれていないことまで決め打ちしている可能性があります）。
+      </p>
+    </div>
+
+    <div class="card">
+      <h2>食い違いが大きい順</h2>
+      <div id="highlights"></div>
+    </div>
+
+    <h2 class="section-title">条件ごとの確率</h2>
+    <div id="axes" class="axes-compare"></div>
+
+    <div class="card">
+      <h2>こだわり条件（ばらつきが大きい順）</h2>
+      <div id="flags" class="table-wrap"></div>
+      <p class="note">50% 以上を「チェックを入れる」として扱っています（<code>interpret.js</code> の <code>FLAG_ON</code>）。</p>
+    </div>
+
+    <div class="summary-actions">
+      <button id="copy" class="ghost" type="button">比較結果をコピー</button>
+      <span class="note" id="copy-note"></span>
+    </div>
+
+    <details class="card">
+      <summary>各モデルのレスポンス（JSON）</summary>
+      <div id="raw"></div>
+    </details>
+  </section>
+</main>
+
+<script type="module" src="./assets/compare-app.js"></script>
+</body>
+</html>

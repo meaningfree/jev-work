@@ -1,21 +1,11 @@
 import { buildQuestions, buildState } from './questions.js';
 import { interpret, summaryText, openQuestions, pct, CONF_LOW, FLAG_ON } from './interpret.js';
 import { mockEvaluate } from './mock.js';
+import { EXAMPLES } from './examples.js';
 
 // Worker で配信しているときは同じオリジンの /jev が中継になる。
 // 中継が無い静的配信（GitHub Pages など）ではデモモードに落ちる。
 const SAME_ORIGIN = new URL('jev', document.baseURI).href;
-
-const EXAMPLES = {
-  family:
-    '夫婦と子ども2人（4歳・1歳）。いま2LDKの賃貸で手狭になってきたので購入を検討中。夫の職場は品川で、電車で40分くらいまでなら許容。子どもを走らせられる公園が近くにあって、静かな住宅地がいい。車も買う予定。予算はあまり余裕がない。',
-  single:
-    '来月から社会人で初めての一人暮らしです。職場は渋谷。通勤時間は短くしたいけど家賃は抑えたい。自炊はあまりしないので広さより駅からの近さ重視。荷物は少なめ。',
-  senior:
-    '実家の母（78歳）と同居することになり、いまの家では階段がつらそうなので住み替えを考えています。私は夫婦2人＋母の3人。母の通院先が近いほうがいい。買い物が歩いて行ける範囲にあると助かります。急いではいません。',
-  remote:
-    '夫婦ともフルリモートで、通勤はほぼありません。都心にこだわらないので、自然が近くて広い家に住みたい。それぞれ仕事部屋が欲しいです。犬を飼っているので庭があると嬉しい。中古をリノベするのもあり。',
-};
 
 const $ = (id) => document.getElementById(id);
 const el = {
