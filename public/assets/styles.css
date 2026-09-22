@@ -212,14 +212,25 @@ code { background: var(--bg); padding: 1px 5px; border-radius: 4px; font-size: .
 
 /* ---------- 比較ページ（compare.html） ---------- */
 
-.model-picker { display: grid; gap: 8px; }
+.model-picker { display: grid; gap: 10px; }
+
+/* 提供元ごとにまとめて、その中のモデルを好きなだけ選べるようにする。 */
+.model-group {
+  border: 1px solid var(--border); border-radius: 8px;
+  margin: 0; padding: 4px 12px 8px;
+}
+.model-group legend { font-size: .82rem; font-weight: 700; padding: 0 6px; }
+.model-group > .note { margin: 0 0 6px; font-size: .76rem; }
+.model-group.off { opacity: .6; }
+
 .model-opt {
   display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
-  padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px;
-  background: var(--bg); font-size: .9rem; cursor: pointer;
+  padding: 5px 8px; border-radius: 6px;
+  font-size: .9rem; cursor: pointer;
 }
-.model-opt:hover { border-color: var(--accent); }
-.model-opt.off { opacity: .55; cursor: not-allowed; }
+.model-opt:hover { background: var(--bg); }
+.model-opt.off { cursor: not-allowed; }
+.model-opt:hover.off { background: transparent; }
 .model-opt input { accent-color: var(--accent); }
 .model-name { font-weight: 700; }
 .model-id { font-size: .75rem; color: var(--muted); font-variant-numeric: tabular-nums; }

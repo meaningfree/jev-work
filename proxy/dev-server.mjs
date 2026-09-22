@@ -9,6 +9,8 @@
  * OPENAI_API_KEY / GEMINI_API_KEY も渡すと、比較ページ（compare.html）で
  * 同じ質問を OpenAI / Gemini にも投げられる。
  *
+ * 回数の上限は RATE_LIMIT_PER_MIN / RATE_LIMIT_LLM_PER_MIN で変えられる（0 で無効）。
+ *
  * キー未設定でも起動する（その場合は画面がデモモードになる）。
  * Cloudflare の実行環境そのままで試したいときは `npx wrangler dev` を使う。
  */
@@ -17,6 +19,7 @@ import { readFile } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
 import { MAX_BODY_BYTES } from './upstream.mjs';
 import { callProvider, providerStatus, validateRequest } from './providers.mjs';
+import { checkRateLimit, limitsFrom, rateLimitMessage } from './ratelimit.mjs';
 
 const PORT = Number(process.env.PORT || 8787);
 const ROOT = new URL('../public/', import.meta.url).pathname;
@@ -45,6 +48,7 @@ const server = createServer(async (req, res) => {
         service: 'jev-proxy',
         configured: Boolean(process.env.TYPESAFE_API_KEY),
         providers: providerStatus(process.env),
+        limits: limitsFrom(process.env),
       });
     }
     if (req.method !== 'POST') return sendJson(res, 405, { error: 'POST only' });
@@ -63,8 +67,15 @@ const server = createServer(async (req, res) => {
     } catch {
       return sendJson(res, 400, { error: 'invalid JSON' });
     }
-    const invalid = validateRequest(payload);
+    const invalid = validateRequest(payload, process.env);
     if (invalid) return sendJson(res, 400, { error: invalid });
+
+    const key = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || 'unknown';
+    const gate = await checkRateLimit(process.env, { key, provider: payload.provider });
+    if (!gate.ok) {
+      res.writeHead(429, { 'Content-Type': 'application/json; charset=utf-8', 'Retry-After': String(gate.retryAfter) });
+      return res.end(JSON.stringify({ error: rateLimitMessage(gate.scope) }));
+    }
 
     const { status, text } = await callProvider(process.env, payload);
     console.log(`[${payload.provider || 'jev'}] ${status} ${text.length}B`);

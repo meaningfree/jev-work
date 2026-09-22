@@ -32,7 +32,7 @@ export function costOf(usage, price) {
 export const formatCost = (usd) => (usd == null ? '—' : `$${usd.toFixed(6)}`);
 
 /**
- * runs: [{ id, label, model, price, ms, result, error }]
+ * runs: [{ id, label, provider, price, ms, result, error }]
  * result は Jev 形式のレスポンス（OpenAI / Gemini もプロキシ側でこの形に直している）。
  */
 export function compareRuns(runs) {

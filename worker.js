@@ -11,15 +11,17 @@
  *   npx wrangler secret put GEMINI_API_KEY     # 比較ページを使う場合（任意）
  *
  * /jev 以外のパスは静的アセット（public/ の中身）が返る。
- * POST /jev の body に provider（jev / openai / gemini）を入れると宛先が変わる。
+ * POST /jev の body に provider（jev / openai / gemini）と model を入れると宛先が変わる。
+ * 呼べる回数には上限がある（wrangler.toml の [[ratelimits]] / proxy/ratelimit.mjs）。
  */
 import { MAX_BODY_BYTES } from './proxy/upstream.mjs';
 import { callProvider, providerStatus, validateRequest } from './proxy/providers.mjs';
+import { checkRateLimit, limitsFrom, rateLimitMessage } from './proxy/ratelimit.mjs';
 
-const json = (body, status) =>
+const json = (body, status, headers = {}) =>
   new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    headers: { 'Content-Type': 'application/json; charset=utf-8', ...headers },
   });
 
 export default {
@@ -34,6 +36,7 @@ export default {
           service: 'jev-proxy',
           configured: Boolean(env.TYPESAFE_API_KEY),
           providers: providerStatus(env),
+          limits: limitsFrom(env),
         },
         200,
       );
@@ -49,8 +52,15 @@ export default {
     } catch {
       return json({ error: 'invalid JSON' }, 400);
     }
-    const invalid = validateRequest(payload);
+    const invalid = validateRequest(payload, env);
     if (invalid) return json({ error: invalid }, 400);
+
+    // 上限は IP ごと。生成モデルは 1 回が高いので、さらに厳しい枠も通る。
+    const key = request.headers.get('CF-Connecting-IP') || 'unknown';
+    const gate = await checkRateLimit(env, { key, provider: payload.provider });
+    if (!gate.ok) {
+      return json({ error: rateLimitMessage(gate.scope) }, 429, { 'Retry-After': String(gate.retryAfter) });
+    }
 
     const { status, text } = await callProvider(env, payload);
     return new Response(text, {

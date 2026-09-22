@@ -19,40 +19,66 @@
  */
 import { callJev } from './upstream.mjs';
 
-/* ---------- プロバイダ定義 ---------- */
+/* ---------- プロバイダとモデルの一覧 ---------- */
 
-// 料金は 100 万トークンあたりの USD（2026/09 時点の公表価格を元にした参考値）。
-// 画面とCLIの概算コスト表示にしか使っていないので、変わったらここだけ直す。
+// 選べるモデルはここに書いたものだけ。公開した /jev は誰でも叩けるので、
+// リクエストで任意のモデル ID を指定できてしまうと、高いモデルを勝手に
+// 使われてこちらのクレジットが減る。だから許可リストにしてある。
+//
+// price は 100 万トークンあたりの USD（2026/09 時点の公表価格。概算表示用）。
+// モデルも値段も入れ替わりが早いので、増やす・直すときはここだけ触ればよい。
+// 一覧に無いモデルを試したいときは OPENAI_MODEL / GEMINI_MODEL / JEV_MODEL で指定する
+// （環境変数で指定したものは選択肢の先頭に並び、単価は不明として扱う）。
 export const PROVIDERS = {
   jev: {
     label: 'Jev',
     keyVar: 'TYPESAFE_API_KEY',
     modelVar: 'JEV_MODEL',
-    defaultModel: 'jev-latest',
-    price: { input: 0.042, output: 0 },
     note: '型つき質問に確率で答える専用モデル',
+    models: [
+      { id: 'jev-latest', short: 'Jev', label: 'jev-latest', price: { input: 0.042, output: 0 } },
+    ],
   },
   openai: {
     label: 'OpenAI',
     keyVar: 'OPENAI_API_KEY',
     modelVar: 'OPENAI_MODEL',
-    defaultModel: 'gpt-4.1-mini',
-    price: { input: 0.4, output: 1.6 },
-    note: 'structured output で同じ質問に確率を書かせる',
+    note: 'structured output（json_schema・strict）で同じ質問に確率を書かせる',
+    models: [
+      { id: 'gpt-5.6-luna', short: 'GPT-5.6 luna', label: 'GPT-5.6 luna（軽量）', price: { input: 0.2, output: 1.2 } },
+      { id: 'gpt-5.6-terra', short: 'GPT-5.6 terra', label: 'GPT-5.6 terra（中位）', price: { input: 2, output: 12 } },
+      { id: 'gpt-5.6-sol', short: 'GPT-5.6 sol', label: 'GPT-5.6 sol（上位）', price: { input: 4, output: 20 } },
+    ],
   },
   gemini: {
     label: 'Gemini',
     keyVar: 'GEMINI_API_KEY',
     modelVar: 'GEMINI_MODEL',
-    defaultModel: 'gemini-2.5-flash',
-    price: { input: 0.3, output: 2.5 },
     note: 'responseSchema で同じ質問に確率を書かせる',
+    models: [
+      // 3.8 Flash の単価は 2026/12/31 までの導入価格（以降は倍になる）。
+      { id: 'gemini-3.8-flash', short: 'Gemini 3.8 Flash', label: 'Gemini 3.8 Flash', price: { input: 0.75, output: 3.75 } },
+      { id: 'gemini-3.5-flash-lite', short: 'Gemini 3.5 Lite', label: 'Gemini 3.5 Flash-Lite（軽量）', price: { input: 0.3, output: 2.5 } },
+      { id: 'gemini-3.1-pro-preview', short: 'Gemini 3.1 Pro', label: 'Gemini 3.1 Pro（preview・上位）', price: { input: 2, output: 12 } },
+    ],
   },
 };
 
 export const PROVIDER_IDS = Object.keys(PROVIDERS);
 
-const modelOf = (id, env) => env[PROVIDERS[id].modelVar] || PROVIDERS[id].defaultModel;
+/**
+ * そのプロバイダで選べるモデルの一覧。
+ * 環境変数でモデルが指定されていれば、それも（単価不明として）先頭に足す。
+ */
+export function modelsOf(id, env = {}) {
+  const provider = PROVIDERS[id];
+  const override = env[provider.modelVar];
+  const listed = provider.models;
+  if (!override || listed.some((m) => m.id === override)) return listed;
+  return [{ id: override, short: override, label: `${override}（環境変数）`, price: null }, ...listed];
+}
+
+const defaultModelOf = (id, env) => modelsOf(id, env)[0].id;
 
 /** 画面が「どのモデルを選ばせてよいか」を知るための一覧。キーそのものは出さない。 */
 export function providerStatus(env) {
@@ -60,18 +86,22 @@ export function providerStatus(env) {
     id,
     label: PROVIDERS[id].label,
     note: PROVIDERS[id].note,
-    model: modelOf(id, env),
-    price: PROVIDERS[id].price,
     configured: Boolean(env[PROVIDERS[id].keyVar]),
+    models: modelsOf(id, env),
   }));
 }
 
 /** リクエストボディの検証。問題なければ null、あればエラー文字列を返す。 */
-export function validateRequest(payload) {
+export function validateRequest(payload, env = {}) {
   if (!payload || typeof payload !== 'object') return 'invalid JSON';
   if (!payload.state || !payload.questions) return 'state and questions are required';
-  if (payload.provider && !PROVIDERS[payload.provider]) {
-    return `unknown provider: ${payload.provider}（${PROVIDER_IDS.join(' / ')}）`;
+
+  const id = payload.provider || 'jev';
+  if (!PROVIDERS[id]) return `unknown provider: ${id}（${PROVIDER_IDS.join(' / ')}）`;
+
+  const allowed = modelsOf(id, env).map((m) => m.id);
+  if (payload.model && !allowed.includes(payload.model)) {
+    return `unknown model: ${payload.model}（${id} で使えるのは ${allowed.join(' / ')}）`;
   }
   return null;
 }
@@ -224,11 +254,18 @@ function parseJsonLoose(text) {
   }
 }
 
-// temperature を受け付けない推論系モデルがあるので、その場合だけ付けない。
-const takesTemperature = (model) => !/^(o\d|gpt-5)/.test(model);
+const postOpenAI = (env, request) =>
+  fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${env.OPENAI_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(request),
+  });
 
 async function callOpenAI(env, payload) {
-  const model = modelOf('openai', env);
+  const model = payload.model || defaultModelOf('openai', env);
   const request = {
     model,
     messages: [
@@ -239,19 +276,20 @@ async function callOpenAI(env, payload) {
       type: 'json_schema',
       json_schema: { name: 'answers', strict: true, schema: answersSchema(payload.questions) },
     },
+    // 比べるたびに数字が動くと差が読めないので、下げられるモデルでは下げる。
+    temperature: 0,
   };
-  if (takesTemperature(model)) request.temperature = 0;
 
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${env.OPENAI_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(request),
-  });
+  let res = await postOpenAI(env, request);
+  let text = await res.text();
 
-  const text = await res.text();
+  // temperature を受け付けないモデル（推論系など）があるので、断られたら外して 1 回だけやり直す。
+  if (res.status === 400 && text.includes('temperature')) {
+    delete request.temperature;
+    res = await postOpenAI(env, request);
+    text = await res.text();
+  }
+
   if (!res.ok) return fail(res.status, `OpenAI がエラーを返しました（HTTP ${res.status}）`, text);
 
   const data = parseJsonLoose(text);
@@ -271,7 +309,7 @@ async function callOpenAI(env, payload) {
 }
 
 async function callGemini(env, payload) {
-  const model = modelOf('gemini', env);
+  const model = payload.model || defaultModelOf('gemini', env);
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
 
   const res = await fetch(url, {
@@ -284,6 +322,11 @@ async function callGemini(env, payload) {
         temperature: 0,
         responseMimeType: 'application/json',
         responseSchema: toGeminiSchema(answersSchema(payload.questions)),
+        // 思考トークンは出力として課金されるうえ遅くなるので、絞りたいときは
+        // GEMINI_THINKING_BUDGET で上限を指定する（未指定ならモデルの既定のまま）。
+        ...(env.GEMINI_THINKING_BUDGET
+          ? { thinkingConfig: { thinkingBudget: Number(env.GEMINI_THINKING_BUDGET) } }
+          : {}),
       },
     }),
   });
@@ -314,7 +357,7 @@ async function callGemini(env, payload) {
 }
 
 async function callJevProvider(env, payload) {
-  const res = await callJev(env.TYPESAFE_API_KEY, { ...payload, model: payload.model || modelOf('jev', env) });
+  const res = await callJev(env.TYPESAFE_API_KEY, { ...payload, model: payload.model || defaultModelOf('jev', env) });
   const text = await res.text();
   if (!res.ok) return { status: res.status, text };
   // Jev はもともとこの形で返すので、どのモデルの結果かだけ足して素通しする。

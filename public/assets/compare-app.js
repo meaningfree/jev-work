@@ -11,9 +11,21 @@ const SAME_ORIGIN = new URL('jev', document.baseURI).href;
 // 中継が無いときに表示するダミー。実際のモデルの挙動ではなく、
 // 画面の動きを確かめるためだけのもの（キーワードマッチに癖を付けただけ）。
 const DEMO_PROVIDERS = [
-  { id: 'jev', label: 'Jev（デモ）', model: 'demo-keyword-matcher', configured: true, demo: { jitter: 0, sharpen: 1, label: 'demo-jev' } },
-  { id: 'openai', label: 'OpenAI（デモ）', model: 'demo-sharpened', configured: true, demo: { jitter: 0.5, sharpen: 2.4, label: 'demo-openai' } },
-  { id: 'gemini', label: 'Gemini（デモ）', model: 'demo-jittered', configured: true, demo: { jitter: 0.8, sharpen: 1.4, label: 'demo-gemini' } },
+  {
+    id: 'jev', label: 'Jev（デモ）', configured: true,
+    models: [{ id: 'demo-jev', short: 'Jev', label: 'demo-keyword-matcher', price: null, demo: { jitter: 0, sharpen: 1, label: 'demo-jev' } }],
+  },
+  {
+    id: 'openai', label: 'OpenAI（デモ）', configured: true,
+    models: [
+      { id: 'demo-openai-small', short: 'OpenAI 小', label: 'demo-sharpened', price: null, demo: { jitter: 0.5, sharpen: 2.4, label: 'demo-openai' } },
+      { id: 'demo-openai-large', short: 'OpenAI 大', label: 'demo-sharpened-2', price: null, demo: { jitter: 0.3, sharpen: 3.2, label: 'demo-openai-large' } },
+    ],
+  },
+  {
+    id: 'gemini', label: 'Gemini（デモ）', configured: true,
+    models: [{ id: 'demo-gemini', short: 'Gemini', label: 'demo-jittered', price: null, demo: { jitter: 0.8, sharpen: 1.4, label: 'demo-gemini' } }],
+  },
 ];
 
 const $ = (id) => document.getElementById(id);
@@ -28,8 +40,11 @@ const el = {
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const ms = (n) => (n == null ? '—' : `${n}ms`);
 const num = (n) => (n == null ? '—' : n.toLocaleString('en-US'));
+const unitPrice = (price) =>
+  price ? `入力 $${price.input} / 出力 $${price.output}（100万トークン）` : '単価不明';
 
 let providers = [];
+let limits = null;
 let demoMode = false;
 let lastCompare = null;
 
@@ -40,40 +55,83 @@ async function resolveProviders() {
     const res = await fetch(SAME_ORIGIN, { method: 'GET' });
     const body = res.ok ? await res.json() : null;
     if (body?.service !== 'jev-proxy' || !Array.isArray(body.providers)) throw new Error('no proxy');
-    const usable = body.providers.filter((p) => p.configured);
-    if (!usable.length) throw new Error('no key');
+    if (!body.providers.some((p) => p.configured)) throw new Error('no key');
     providers = body.providers;
+    limits = body.limits ?? null;
     demoMode = false;
   } catch {
     providers = DEMO_PROVIDERS;
+    limits = null;
     demoMode = true;
   }
   renderPicker();
 }
 
+/** チェックボックスの値。プロバイダとモデルの組で 1 行になる。 */
+const runIdOf = (providerId, modelId) => `${providerId}:${modelId}`;
+
+function findEntry(runId) {
+  const [providerId, ...rest] = runId.split(':');
+  const modelId = rest.join(':');
+  const provider = providers.find((p) => p.id === providerId);
+  const model = provider?.models.find((m) => m.id === modelId);
+  return provider && model ? { provider, model } : null;
+}
+
+// 既定では各プロバイダの先頭のモデルだけを選ぶ（全部入れると高くつくので）。
 function renderPicker() {
   el.picker.innerHTML = providers
     .map((p) => `
-      <label class="model-opt ${p.configured ? '' : 'off'}" title="${esc(p.note ?? '')}">
-        <input type="checkbox" value="${esc(p.id)}" ${p.configured ? 'checked' : 'disabled'} />
-        <span class="model-name">${esc(p.label)}</span>
-        <span class="model-id">${esc(p.model)}</span>
-        ${p.configured ? '' : '<span class="model-id">キー未設定</span>'}
-      </label>`)
+      <fieldset class="model-group ${p.configured ? '' : 'off'}">
+        <legend>${esc(p.label)}${p.configured ? '' : '<span class="tag">キー未設定</span>'}</legend>
+        ${p.note ? `<p class="note">${esc(p.note)}</p>` : ''}
+        ${p.models.map((m, i) => `
+          <label class="model-opt ${p.configured ? '' : 'off'}">
+            <input type="checkbox" value="${esc(runIdOf(p.id, m.id))}"
+              ${p.configured && i === 0 ? 'checked' : ''} ${p.configured ? '' : 'disabled'} />
+            <span class="model-name">${esc(m.label)}</span>
+            <span class="model-id">${esc(m.id)}</span>
+            <span class="model-id">${esc(unitPrice(m.price))}</span>
+          </label>`).join('')}
+      </fieldset>`)
     .join('');
 
-  const usable = providers.filter((p) => p.configured).length;
-  el.pickerNote.textContent = demoMode
-    ? '中継が見つからないのでデモモードです。表示されるのは実際のモデルの出力ではなく、画面確認用のダミーです。'
-    : usable < 2
-      ? '比較には 2 つ以上のキーが要ります。OPENAI_API_KEY / GEMINI_API_KEY を Worker のシークレット（ローカルなら .dev.vars）に足すと選べるようになります。'
-      : providers.some((p) => !p.configured)
-        ? 'キーが設定されていないモデルは選べません（シークレットに追加すると出てきます）。'
-        : '';
+  for (const input of el.picker.querySelectorAll('input')) {
+    input.addEventListener('change', updatePickerNote);
+  }
+  updatePickerNote();
 }
 
-const selected = () =>
-  [...el.picker.querySelectorAll('input:checked')].map((i) => providers.find((p) => p.id === i.value));
+function updatePickerNote() {
+  const chosen = selected();
+  const llm = chosen.filter((e) => e.provider.id !== 'jev').length;
+  const lines = [];
+
+  if (demoMode) {
+    lines.push('中継が見つからないのでデモモードです。表示されるのは実際のモデルの出力ではなく、画面確認用のダミーです。');
+  } else {
+    const usable = providers.filter((p) => p.configured).length;
+    if (usable < 2) {
+      lines.push('比較には 2 つ以上のキーが要ります。OPENAI_API_KEY / GEMINI_API_KEY を Worker のシークレット（ローカルなら .dev.vars）に足すと選べるようになります。');
+    } else if (providers.some((p) => !p.configured)) {
+      lines.push('キーが設定されていないモデルは選べません（シークレットに追加すると出てきます）。');
+    }
+    // 1 回の実行で、選んだ数だけ上限を消費する。
+    if (limits?.llm?.limit > 0 && llm > 0) {
+      lines.push(`選択中 ${chosen.length} モデル（うち生成モデル ${llm}）。生成モデルは 1 分あたり ${limits.llm.limit} 回までなので、この組み合わせなら 1 分に ${Math.floor(limits.llm.limit / llm)} 回まで実行できます。`);
+    } else {
+      lines.push(`選択中 ${chosen.length} モデル。`);
+    }
+  }
+  el.pickerNote.textContent = lines.join(' ');
+}
+
+/** 選択中のモデル（プロバイダとモデルの組）。 */
+function selected() {
+  return [...el.picker.querySelectorAll('input:checked')]
+    .map((input) => findEntry(input.value))
+    .filter(Boolean);
+}
 
 const ready = resolveProviders();
 
@@ -90,21 +148,30 @@ function errorMessage(status, body) {
   return `HTTP ${status}${detail ? `: ${detail}` : ''}`;
 }
 
-async function runOne(provider, text) {
+async function runOne({ provider, model }, text) {
   const started = performance.now();
-  const run = { id: provider.id, label: provider.label, price: provider.price, ms: null, result: null, error: null };
+  const run = {
+    id: runIdOf(provider.id, model.id),
+    label: model.short || model.id,
+    provider: provider.label,
+    price: model.price,
+    ms: null,
+    result: null,
+    error: null,
+  };
 
   try {
     if (demoMode) {
       // 見た目だけそれらしくするために、少しだけ待つ。
       await new Promise((r) => setTimeout(r, 200 + Math.random() * 400));
-      run.result = mockEvaluate(text, provider.demo);
+      run.result = mockEvaluate(text, model.demo);
     } else {
       const res = await fetch(SAME_ORIGIN, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           provider: provider.id,
+          model: model.id,
           state: buildState(text),
           questions: buildQuestions(),
         }),
@@ -125,12 +192,13 @@ async function runOne(provider, text) {
 function renderRuns(runs) {
   const rows = runs.map((run) => {
     if (run.error) {
-      return `<tr class="failed"><th>${esc(run.label)}</th><td colspan="4">失敗: ${esc(run.error)}</td></tr>`;
+      return `<tr class="failed"><th>${esc(run.label)}<span class="model-id">${esc(run.provider ?? '')}</span></th><td colspan="5">失敗: ${esc(run.error)}</td></tr>`;
     }
     const usage = run.result?.usage || {};
     return `
       <tr>
         <th>${esc(run.label)}<span class="model-id">${esc(run.result?.model ?? '')}</span></th>
+        <td>${esc(run.provider ?? '')}</td>
         <td>${ms(run.ms)}</td>
         <td>${num(usage.input_tokens)}</td>
         <td>${num(usage.output_tokens)}</td>
@@ -139,7 +207,7 @@ function renderRuns(runs) {
   });
   el.runs.innerHTML = `
     <table class="cmp">
-      <thead><tr><th>モデル</th><th>時間</th><th>入力トークン</th><th>出力トークン</th><th>概算コスト</th></tr></thead>
+      <thead><tr><th>モデル</th><th>提供元</th><th>時間</th><th>入力トークン</th><th>出力トークン</th><th>概算コスト</th></tr></thead>
       <tbody>${rows.join('')}</tbody>
     </table>`;
 }
@@ -244,7 +312,7 @@ function renderFlags(cmp) {
 
 function renderRaw(runs) {
   el.raw.innerHTML = runs.map((run) => `
-    <h3>${esc(run.label)}</h3>
+    <h3>${esc(run.label)}<span class="tag">${esc(run.provider ?? '')}</span></h3>
     <pre>${esc(run.error ? run.error : JSON.stringify(run.result, null, 2))}</pre>`).join('');
 }
 
@@ -261,15 +329,15 @@ async function run() {
   await ready;
   const chosen = selected();
   if (chosen.length < 2) {
-    el.status.textContent = '比べるモデルを 2 つ以上選んでください。';
+    el.status.textContent = '比べるモデルを 2 つ以上選んでください（同じ提供元の別モデル同士でも比べられます）。';
     return;
   }
 
   el.run.disabled = true;
-  el.status.textContent = `${chosen.map((p) => p.label).join(' / ')} に同じ質問を投げています…`;
+  el.status.textContent = `${chosen.map((e) => e.model.short || e.model.id).join(' / ')} に同じ質問を投げています…`;
 
   // 同じ質問を同時に投げる。1 つ失敗しても残りは表示する。
-  const runs = await Promise.all(chosen.map((provider) => runOne(provider, text)));
+  const runs = await Promise.all(chosen.map((entry) => runOne(entry, text)));
   const cmp = compareRuns(runs);
   lastCompare = cmp;
 

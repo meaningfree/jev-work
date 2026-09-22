@@ -7,6 +7,30 @@ compatibility_date = "2026-09-01"
 directory = "./public"
 binding = "ASSETS"
 
+# 呼べる回数の上限（IP ごと）。公開した /jev は誰でも叩けて、呼ばれた分だけ
+# こちらのクレジットが減るので入れてある。period は 10 か 60 しか取れない。
+#   RATE_LIMIT_ALL … POST /jev 全部（既存の 2 画面も含む）
+#   RATE_LIMIT_LLM … 生成モデル（OpenAI / Gemini）だけ。1 回が高いので別枠で絞る
+# namespace_id はこの Worker の中で重複しなければ何でもよい。
+[[ratelimits]]
+name = "RATE_LIMIT_ALL"
+namespace_id = "1001"
+  [ratelimits.simple]
+  limit = 30
+  period = 60
+
+[[ratelimits]]
+name = "RATE_LIMIT_LLM"
+namespace_id = "1002"
+  [ratelimits.simple]
+  limit = 8
+  period = 60
+
+# バインディングが無い環境（node の dev-server など）では proxy/ratelimit.mjs の
+# メモリ内カウンタが使われる。数え方が違うだけで、上限そのものは同じ既定値。
+
 # シークレットはここには書かない。
 #   npx wrangler secret put TYPESAFE_API_KEY
+#   npx wrangler secret put OPENAI_API_KEY     # 比較ページを使う場合だけ
+#   npx wrangler secret put GEMINI_API_KEY     # 同上
 # ローカル（npx wrangler dev）では .dev.vars に書く。
