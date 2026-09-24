@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>入力しながら検索条件をつくる</title>
+<meta name="description" content="フォームを変えるたびに、不動産ポータルの検索条件をその場で出し直します（Jev / TypeSafe System One のお試し）" />
+<link rel="stylesheet" href="./assets/styles.css" />
+</head>
+<body>
+<header class="site-header">
+  <nav class="site-nav">
+    <a href="./index.html">検索条件をつくる</a>
+    <a href="./live.html" aria-current="page">入力しながら検索条件をつくる</a>
+    <a href="./area.html">住むエリアを探す</a>
+  </nav>
+  <h1>入力しながら<wbr />検索条件をつくる</h1>
+  <p class="lead">
+    フォームを変えるたびに、検索条件をその場で出し直します。
+    項目は「取引の種類・間取り・予算・駅徒歩・築年数」と、こだわり条件 6 つに絞っています。
+  </p>
+</header>
+
+<main class="live">
+  <form id="form" class="card live-form" autocomplete="off">
+    <div class="examples">
+      <span class="examples-label">例を入れる：</span>
+      <button class="chip" type="button" data-example="family">子育て中・購入検討</button>
+      <button class="chip" type="button" data-example="single">初めての一人暮らし</button>
+      <button class="chip" type="button" data-example="senior">親との住み替え</button>
+    </div>
+
+    <div class="field">
+      <label class="field-label" for="household">世帯</label>
+      <select id="household" name="household">
+        <option value="">選んでください</option>
+        <option>一人暮らし</option>
+        <option>夫婦・カップルの2人暮らし</option>
+        <option>夫婦＋子ども1人</option>
+        <option>夫婦＋子ども2人以上</option>
+        <option>親と同居（二世帯を含む）</option>
+      </select>
+    </div>
+
+    <fieldset class="field">
+      <legend class="field-label">住まいの持ち方</legend>
+      <div class="seg">
+        <label><input type="radio" name="intent" value="" checked /> 決めていない</label>
+        <label><input type="radio" name="intent" value="賃貸で探したい" /> 借りたい</label>
+        <label><input type="radio" name="intent" value="購入を検討している" /> 買いたい</label>
+      </div>
+    </fieldset>
+
+    <div class="field">
+      <label class="field-label" for="budget">予算</label>
+      <input id="budget" name="budget" type="text" placeholder="例）家賃12万円まで／4,000万円くらい" />
+    </div>
+
+    <div class="field">
+      <label class="field-label" for="work">職場・よく行く場所</label>
+      <input id="work" name="work" type="text" placeholder="例）品川・在宅が週3日" />
+    </div>
+
+    <div class="field">
+      <label class="field-label" for="commute">通勤・移動</label>
+      <select id="commute" name="commute">
+        <option value="">選んでください</option>
+        <option>とにかく駅から近いところがいい</option>
+        <option>電車で30分くらいまで</option>
+        <option>電車で1時間くらいまでなら許容</option>
+        <option>ほぼ通勤しない・車移動が中心</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label class="field-label" for="timing">住み替えの時期</label>
+      <select id="timing" name="timing">
+        <option value="">選んでください</option>
+        <option>すぐにでも引っ越したい</option>
+        <option>半年以内</option>
+        <option>1年以上先・急いでいない</option>
+      </select>
+    </div>
+
+    <fieldset class="field">
+      <legend class="field-label">暮らしの事情</legend>
+      <div class="checks">
+        <label><input type="checkbox" name="life" value="ペットを飼っている" /> ペットがいる</label>
+        <label><input type="checkbox" name="life" value="車を持っている・買う予定" /> 車を使う</label>
+        <label><input type="checkbox" name="life" value="防犯が気になる" /> 防犯が気になる</label>
+        <label><input type="checkbox" name="life" value="高齢の家族がいて階段がつらい" /> 高齢の家族がいる</label>
+        <label><input type="checkbox" name="life" value="保育園・小学校に通う子どもがいる" /> 保育園・学校に通う子ども</label>
+        <label><input type="checkbox" name="life" value="新しくてきれいな物件がいい" /> 新しさ重視</label>
+      </div>
+    </fieldset>
+
+    <div class="field">
+      <label class="field-label" for="memo">そのほか（自由に）</label>
+      <textarea id="memo" name="memo" rows="3" placeholder="例）子どもを走らせられる公園が近くにあると嬉しい"></textarea>
+    </div>
+
+    <div class="actions">
+      <button id="reset" class="ghost" type="reset">クリア</button>
+    </div>
+  </form>
+
+  <section class="live-result" aria-labelledby="live-title">
+    <div class="card summary">
+      <div class="live-head">
+        <h2 id="live-title">いまの検索条件</h2>
+        <span id="status" class="live-status" role="status" aria-live="polite"></span>
+      </div>
+      <div id="output" class="live-output">
+        <p class="note" id="empty">フォームに入力すると、ここに検索条件が出ます。</p>
+        <div id="summary-chips" class="chips"></div>
+        <h3>チェックを入れる条件</h3>
+        <div id="flag-chips" class="chips"></div>
+        <div id="axes" class="live-axes"></div>
+      </div>
+      <div class="summary-actions">
+        <button id="copy" class="ghost" type="button" disabled>検索条件メモをコピー</button>
+        <span class="note" id="copy-note"></span>
+      </div>
+    </div>
+
+    <details class="card">
+      <summary>Jev に渡しているメモ</summary>
+      <pre id="hearing"></pre>
+    </details>
+  </section>
+</main>
+
+<script type="module" src="./assets/live-app.js"></script>
+</body>
+</html>
