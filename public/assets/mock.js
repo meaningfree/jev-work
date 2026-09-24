@@ -122,10 +122,11 @@ function softmax(weights) {
 
 const round = (n, digits = 3) => Number(n.toFixed(digits));
 
-export function mockEvaluate(text) {
+/** axes / flags を渡すと、その項目だけ答える（live.html の絞った質問セット用）。 */
+export function mockEvaluate(text, { axes = AXES, flags = FLAGS } = {}) {
   const answers = {};
 
-  for (const axis of AXES) {
+  for (const axis of axes) {
     const q = axis.question;
     if (q.type === 'choice') {
       const options = Object.keys(q.criteria);
@@ -160,7 +161,7 @@ export function mockEvaluate(text) {
     }
   }
 
-  for (const flag of FLAGS) {
+  for (const flag of flags) {
     const n = hits(text, FLAG_HINTS[flag.id]);
     answers[`flag_${flag.id}`] = {
       type: 'noul',

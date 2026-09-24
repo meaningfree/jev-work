@@ -209,3 +209,55 @@ code { background: var(--bg); padding: 1px 5px; border-radius: 4px; font-size: .
 .pref-group { border-top: 1px solid var(--border); padding: 10px 0 0; margin-top: 10px; }
 .pref-group summary { font-size: .88rem; font-weight: 600; }
 .pref-group .bars { margin-top: 10px; }
+
+/* ---------- 入力しながら検索条件をつくる（live.html） ---------- */
+
+.live-form .field { margin: 0 0 14px; border: 0; padding: 0; min-width: 0; }
+.live-form select,
+.live-form input[type="text"] {
+  width: 100%; padding: 10px 12px; font: inherit; font-size: .95rem;
+  color: var(--text); background: var(--bg);
+  border: 1px solid var(--border); border-radius: 8px;
+}
+.live-form .actions { margin-top: 4px; }
+
+.seg, .checks { display: flex; flex-wrap: wrap; gap: 8px; }
+.seg label, .checks label {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 12px; font-size: .85rem; cursor: pointer;
+  border: 1px solid var(--border); border-radius: 999px;
+}
+.seg label:has(input:checked), .checks label:has(input:checked) {
+  border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 600;
+}
+
+.live-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.live-head h2 { margin: 0; }
+.live-status { font-size: .78rem; color: var(--muted); }
+
+.live-output { transition: opacity .15s; }
+.live-output.stale { opacity: .55; }
+.live-output #summary-chips { margin-top: 12px; }
+
+.cond.changed { animation: cond-changed 1.2s ease-out; }
+@keyframes cond-changed {
+  from { box-shadow: 0 0 0 3px var(--bar-top); }
+  to { box-shadow: 0 0 0 0 transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cond.changed { animation: none; outline: 2px solid var(--bar-top); }
+}
+
+.live-axes { display: grid; gap: 14px; margin-top: 20px; }
+.live-axis h4 { margin: 0 0 6px; font-size: .82rem; color: var(--muted); }
+
+/* 広い画面ではフォームと結果を横に並べ、結果は画面内に留める。 */
+@media (min-width: 960px) {
+  main.live {
+    max-width: 1080px;
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start;
+  }
+  .live-result { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow-y: auto; }
+  .live-head, .live-output { min-width: 0; }
+  body:has(main.live) .site-header { max-width: 1080px; }
+}
